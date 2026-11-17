@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "framework": null,
+  "buildCommand": "mkdir -p public && cat source/chunk00.b64 source/chunk01.b64 source/chunk02.b64 source/chunk03.b64 source/chunk04.b64 source/chunk05.b64 source/chunk06a.b64 source/chunk06b.b64 source/chunk06c2.b64 source/chunk06d.b64 source/chunk06e.b64 source/chunk07.b64 source/chunk08.b64 | base64 -d | tar -xz -C public",
+  "outputDirectory": "public",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://ovkhcycvybzbxvoomelm.supabase.co/functions/v1/cloudvault-api/api/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    }
+  ]
+}
