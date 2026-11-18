@@ -1,0 +1,70 @@
+name: CloudVault checks and Android APK
+
+on:
+  push:
+    branches: [main, 'feature/**']
+    paths:
+      - 'source/native-bundle/**'
+      - 'build.sh'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'source/native-bundle/**'
+      - 'build.sh'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Expand app source bundle
+        run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check web/src/main.js
+          node --check web/src/telegram.js
+          node --check server/index.js
+      - name: Run tests
+        run: npm test
+      - name: Build web output
+        run: npm run build
+
+  android-debug-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Expand app source bundle
+        run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14'
+      - name: Build debug APK
+        run: gradle --no-daemon -p android :app:assembleDebug
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudvault-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
