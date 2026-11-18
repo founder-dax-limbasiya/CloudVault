@@ -19,7 +19,7 @@ self.fetch = (input, init) => {
 let sessionPromise;
 
 function splitText(text, limit = 620) {
-  const sentences = text.split(/(?<=[.!?।])\\s+|[\\r\\n]+/u);
+  const sentences = text.split(/(?<=[.!?।])\s+|[\r\n]+/u);
   const chunks = [];
   let current = "";
   for (const sentence of sentences) {
@@ -27,7 +27,7 @@ function splitText(text, limit = 620) {
     if (!clean) continue;
     if (clean.length > limit) {
       if (current) { chunks.push(current); current = ""; }
-      const words = clean.split(/\\s+/u);
+      const words = clean.split(/\s+/u);
       let part = "";
       for (const word of words) {
         if (part && part.length + word.length + 1 > limit) {
