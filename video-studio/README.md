@@ -64,3 +64,12 @@ The app is a Vite static site and can be deployed to Vercel with the project roo
 
 - Browser ASR is configured to use ONNX Runtime Web (WASM/WebGPU). The Vercel build skips the optional Node CUDA execution-provider download; CUDA is not needed to run inference in the browser.
 - Long-form rendering from a mobile browser can still be interrupted by memory pressure or the browser suspending the tab. Removing a software duration cap does not make phone memory unlimited.
+
+
+## Full-film engine bridge
+
+The Studio includes a local-only ChangJi engine address setting and a JSON project-brief export. The brief packages the script, a draft scene breakdown, title, aspect ratio and subtitle preference for use as a production reference in ChangJi. The engine address is stored only in this browser's local storage. Opening it navigates to the user's separately hosted ChangJi instance.
+
+This bridge does **not** claim to submit jobs to ChangJi's private/internal API: its public README describes the engine and HTTP interface but does not specify a stable external job-submission contract. A real job API adapter should be added against a pinned ChangJi release/API schema and tested against a running GPU host before enabling one-click remote rendering.
+
+ChangJi project: https://github.com/changji-ai/ChangJi
