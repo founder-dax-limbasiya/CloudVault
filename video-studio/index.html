@@ -99,6 +99,23 @@
               <div id="musicName" class="file-note hidden"></div>
             </section>
 
+
+            <section class="panel engine-panel">
+              <div class="section-head">
+                <div><span class="step">05</span><h2>Full AI film engine</h2></div>
+                <span class="engine-tag">GPU CONNECT</span>
+              </div>
+              <p class="fineprint engine-intro">Connect a running ChangJi film engine on a GPU computer. Vercel hosts this studio; the connected engine does the heavy film generation.</p>
+              <label class="field-label" for="filmEngineUrl">ChangJi engine address</label>
+              <input id="filmEngineUrl" class="text-input" type="url" inputmode="url" placeholder="https://your-gpu-engine.example.com" autocomplete="url" />
+              <div class="engine-actions">
+                <button id="saveEngineBtn" class="secondary-btn" type="button">Save engine</button>
+                <button id="openEngineBtn" class="primary-btn" type="button">Open engine ↗</button>
+              </div>
+              <div id="engineStatus" class="engine-status" role="status">No GPU engine connected yet.</div>
+              <button id="filmBriefBtn" class="secondary-btn brief-btn" type="button">↓ Export full-film project brief (JSON)</button>
+              <p class="fineprint">The project brief contains your title, script, scene breakdown, aspect ratio and caption preferences. It does not upload your script. Open the engine separately and use the brief as the production reference.</p>
+            </section>
             <section class="panel export-panel">
               <div class="section-head">
                 <div><span class="step">04</span><h2>Export settings</h2></div>
@@ -153,7 +170,7 @@
             </section>
             <section class="panel privacy-card">
               <div class="privacy-icon">⌂</div>
-              <div><strong>Your files stay on your device</strong><p>Voice generation, mixing and video rendering happen locally in this browser. Nothing is uploaded to SceneForge.</p></div>
+              <div><strong>Local-first by default</strong><p>Your media stays in this browser unless you choose to upload it to a separately connected GPU film engine.</p></div>
             </section>
           </aside>
         </section>
