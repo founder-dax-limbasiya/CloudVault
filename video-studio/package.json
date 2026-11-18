@@ -12,7 +12,8 @@
     "@pbji/piper-tts-web": "1.0.4",
     "@ffmpeg/ffmpeg": "0.12.15",
     "@ffmpeg/util": "0.12.2",
-    "onnxruntime-web": "1.23.0"
+    "onnxruntime-web": "1.23.0",
+    "@huggingface/transformers": "3.8.1"
   },
   "devDependencies": {
     "vite": "7.1.7"
