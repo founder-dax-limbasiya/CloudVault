@@ -9,6 +9,9 @@ export default defineConfig({
     sourcemap: false
   },
   optimizeDeps: {
-    exclude: ["@pbji/piper-tts-web", "onnxruntime-web"]
+    exclude: ["@pbji/piper-tts-web", "onnxruntime-web", "@huggingface/transformers"]
+  },
+  resolve: {
+    conditions: ["browser", "module", "import", "default"]
   }
 });
