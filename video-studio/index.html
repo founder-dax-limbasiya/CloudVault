@@ -38,7 +38,7 @@
               <label class="field-label" for="videoTitle">Video title</label>
               <input id="videoTitle" class="text-input" maxlength="90" value="आख़िरी ट्रेन — प्लेटफ़ॉर्म नंबर 0" placeholder="Give your story a title" />
               <label class="field-label" for="scriptInput">Narration script</label>
-              <textarea id="scriptInput" class="script-input" maxlength="12000" spellcheck="false" placeholder="Paste your Hindi or English script here...">रात के बारह बजकर सत्रह मिनट पर भैरवपुर स्टेशन की घड़ी अचानक रुक गई। प्लेटफ़ॉर्म पर सिर्फ़ कबीर था, और दूर से आती ट्रेन की एक धीमी सीटी।
+              <textarea id="scriptInput" class="script-input" maxlength="70000" spellcheck="false" placeholder="Paste your Hindi or English script here...">रात के बारह बजकर सत्रह मिनट पर भैरवपुर स्टेशन की घड़ी अचानक रुक गई। प्लेटफ़ॉर्म पर सिर्फ़ कबीर था, और दूर से आती ट्रेन की एक धीमी सीटी।
 
 स्टेशन मास्टर देवेंद्र ने उसे पहले ही चेतावनी दी थी। अगर आधी रात के बाद प्लेटफ़ॉर्म शून्य की घोषणा हो, तो बाहर मत जाना।
 
@@ -107,7 +107,23 @@
                 <div><label class="field-label" for="aspectSelect">Aspect ratio</label><select id="aspectSelect" class="text-input"><option value="16:9">16:9 · YouTube</option><option value="9:16">9:16 · Shorts / Reels</option><option value="1:1">1:1 · Square</option></select></div>
                 <div><label class="field-label" for="qualitySelect">Resolution</label><select id="qualitySelect" class="text-input"><option value="720">720p · Recommended</option><option value="480">480p · Faster export</option></select></div>
               </div>
-              <label class="check-row"><input id="captionsToggle" type="checkbox" checked /><span>Burn animated captions into video</span></label>
+              <label class="check-row"><input id="captionsToggle" type="checkbox" checked /><span>Word-synced karaoke captions (OpenShorts style)</span></label>
+              <div class="caption-tools">
+                <label class="caption-language">Caption language
+                  <select id="captionLanguage" class="text-input">
+                    <option value="">Auto detect</option>
+                    <option value="hindi">Hindi</option>
+                    <option value="english">English</option>
+                    <option value="gujarati">Gujarati</option>
+                  </select>
+                </label>
+                <button id="syncCaptionsBtn" class="secondary-btn" type="button">↻ Sync word captions</button>
+              </div>
+              <div id="captionProgressWrap" class="progress-wrap hidden">
+                <div class="progress-label"><span id="captionStatus">Loading speech alignment…</span><strong id="captionPercent">0%</strong></div>
+                <div class="progress-track"><div id="captionProgress" class="progress-fill"></div></div>
+              </div>
+              <p class="fineprint">Uses Whisper word timestamps locally in your browser. First use downloads the multilingual model and caches it.</p>
               <button id="renderBtn" class="primary-btn full-btn render-btn" type="button" disabled><span class="btn-icon">▶</span> Create video</button>
               <p id="renderHint" class="fineprint">Generate or upload a voiceover to enable video export.</p>
               <div id="renderProgressWrap" class="progress-wrap hidden">
