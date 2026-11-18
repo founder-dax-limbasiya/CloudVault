@@ -42,3 +42,19 @@ The configured Rohan Hindi ONNX weights are fetched from [rhasspy/piper-voices](
 ## Deployment
 
 The app is a Vite static site and can be deployed to Vercel with the project root set to `video-studio`.
+
+
+## Open-source caption and long-form upgrades
+
+- **Word-aligned captions:** local multilingual Whisper through Transformers.js, returning word-level timestamps in the browser. The karaoke grouping/highlight treatment is adapted from OpenShorts' MIT-licensed subtitle workflow (white words, yellow active word, pop emphasis, short timed blocks).
+- **Long scripts:** scene splitting no longer truncates at 28 scenes; Piper narration is synthesized in smaller passages and stitched into one WAV. Mobile memory and processing speed still depend on the device.
+- **No fixed 10-minute export stop:** the old hard stop has been removed. Very long canvas recordings can still run out of mobile memory; a queued cloud render worker is the proper route for long films.
+- **Film-pipeline research:** ChangJi is an Apache-2.0 open-source AI film-studio reference for chapter/shot tables, continuity assets, render retries, and final film joining. It runs its AI models on a GPU machine; it is not a Vercel function and its model weights have separate terms.
+- **Video model research:** Wan 2.2, HunyuanVideo 1.5, and LTX-2.3 are candidate GPU backends. We must review each checkpoint's model license before commercial use; Vercel hosts the UI/orchestration, not these GPU weights.
+
+### Source projects
+- OpenShorts: https://github.com/agusmakmun/openshorts (MIT core; subtitle timing and karaoke styling reference)
+- Hugging Face Transformers.js: https://github.com/huggingface/transformers.js
+- Whisper ONNX multilingual tiny: https://huggingface.co/onnx-community/whisper-tiny
+- ChangJi: https://github.com/changji-ai/ChangJi (Apache-2.0 application; downloaded model weights have separate licenses)
+- AI video model survey: https://github.com/backblaze-labs/awesome-video-generation
