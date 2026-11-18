@@ -5,6 +5,12 @@ import { toBlobURL } from "@ffmpeg/util";
 const $ = (id) => document.getElementById(id);
 const state = {
   worker: null,
+  captionWorker: null,
+  captionPromise: null,
+  captionResolve: null,
+  captionReject: null,
+  captionWords: [],
+  captionBlocks: [],
   voiceBlob: null,
   voiceBuffer: null,
   musicBuffer: null,
@@ -46,7 +52,7 @@ function splitScenes(text) {
   const chunks = [];
   let current = "";
   for (const sentence of items) {
-    if (current && (current.length + sentence.length > 150 || chunks.length >= 26)) {
+    if (current && current.length + sentence.length > 150) {
       chunks.push(current);
       current = sentence;
     } else {
@@ -54,7 +60,7 @@ function splitScenes(text) {
     }
   }
   if (current) chunks.push(current);
-  return chunks.slice(0, 28);
+  return chunks;
 }
 
 function wrapText(ctx, text, maxWidth) {
@@ -70,6 +76,93 @@ function wrapText(ctx, text, maxWidth) {
   }
   if (line) lines.push(line);
   return lines;
+}
+
+
+function buildCaptionBlocks(words, maxChars = 16, maxDuration = 1.4) {
+  const clean = (words || []).map((word) => ({
+    text: String(word.text || "").trim(),
+    start: Number(word.start),
+    end: Number(word.end)
+  })).filter(word => word.text && Number.isFinite(word.start) && Number.isFinite(word.end) && word.end > word.start);
+
+  const blocks = [];
+  let current = [];
+  let blockStart = 0;
+  for (const word of clean) {
+    if (!current.length) {
+      current = [word];
+      blockStart = word.start;
+      continue;
+    }
+    const textLength = current.reduce((sum, item) => sum + item.text.length + 1, 0);
+    const span = word.end - blockStart;
+    if (textLength + word.text.length > maxChars || span > maxDuration) {
+      blocks.push({ start: current[0].start, end: current[current.length - 1].end, words: current });
+      current = [word];
+      blockStart = word.start;
+    } else {
+      current.push(word);
+    }
+  }
+  if (current.length) blocks.push({ start: current[0].start, end: current[current.length - 1].end, words: current });
+  return blocks;
+}
+
+function findCaptionBlock(time) {
+  return state.captionBlocks.find(block =>
+    time >= block.start && time <= block.end &&
+    block.words.some(word => time >= word.start && time <= word.end)
+  );
+}
+
+function drawKaraokeCaption(ctx, block, time, W, H) {
+  if (!block) return;
+  const fontSize = Math.max(22, Math.min(54, W * 0.038));
+  const gap = Math.max(8, fontSize * 0.22);
+  ctx.save();
+  ctx.font = `800 ${fontSize}px "Noto Sans Devanagari", "Arial", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const metrics = block.words.map(word => {
+    const label = /[A-Za-z]/.test(word.text) ? word.text.toLocaleUpperCase() : word.text;
+    return { ...word, label, width: ctx.measureText(label).width };
+  });
+  const totalWidth = metrics.reduce((sum, word) => sum + word.width, 0) + gap * Math.max(0, metrics.length - 1);
+  const scale = Math.min(1, (W * 0.88) / Math.max(1, totalWidth));
+  const renderedWidth = totalWidth * scale;
+  const centerY = H * 0.86;
+  const padX = fontSize * 0.30;
+  const padY = fontSize * 0.48;
+
+  // The OpenShorts default is white text, a yellow active word and a heavy black outline.
+  if (metrics.length > 1) {
+    ctx.fillStyle = "rgba(7,8,12,.32)";
+    ctx.beginPath();
+    const boxW = Math.min(W * 0.94, renderedWidth + padX * 2);
+    ctx.roundRect((W - boxW) / 2, centerY - fontSize * 0.78, boxW, fontSize * 1.56, 12);
+    ctx.fill();
+  }
+
+  let x = (W - renderedWidth) / 2;
+  for (const word of metrics) {
+    const active = time >= word.start && time <= word.end;
+    const pop = active ? 1.13 : 1;
+    const drawX = x + (word.width * scale) / 2;
+    ctx.save();
+    ctx.translate(drawX, centerY);
+    ctx.scale(scale * pop, scale * pop);
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(3, fontSize * 0.15);
+    ctx.strokeStyle = "#050505";
+    ctx.strokeText(word.label, 0, 0);
+    ctx.fillStyle = active ? "#FFE500" : "#FFFFFF";
+    ctx.fillText(word.label, 0, 0);
+    ctx.restore();
+    x += (word.width + gap) * scale;
+  }
+  ctx.restore();
 }
 
 function drawFrame(time = 0, duration = 1, live = false) {
@@ -140,18 +233,22 @@ function drawFrame(time = 0, duration = 1, live = false) {
   heroLines.forEach((line, i) => ctx.fillText(line, W / 2, startY + i * H * .09));
 
   if ($("captionsToggle").checked) {
-    const captionLines = wrapText(ctx, text, W * .80).slice(0, 3);
-    const lineH = Math.max(24, H * .039);
-    const boxH = captionLines.length * lineH + H * .055;
-    const boxY = H * .78 - boxH / 2;
-    ctx.fillStyle = "rgba(8,10,15,.72)";
-    const boxW = W * .88;
-    ctx.beginPath();
-    ctx.roundRect((W - boxW) / 2, boxY, boxW, boxH, 16);
-    ctx.fill();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "600 " + Math.max(16, W * .026) + "px Arial, sans-serif";
-    captionLines.forEach((line, i) => ctx.fillText(line, W / 2, boxY + H * .032 + (i + 1) * lineH));
+    if (state.captionBlocks.length) {
+      drawKaraokeCaption(ctx, findCaptionBlock(time), time, W, H);
+    } else {
+      const captionLines = wrapText(ctx, text, W * .80).slice(0, 3);
+      const lineH = Math.max(24, H * .039);
+      const boxH = captionLines.length * lineH + H * .055;
+      const boxY = H * .78 - boxH / 2;
+      ctx.fillStyle = "rgba(8,10,15,.72)";
+      const boxW = W * .88;
+      ctx.beginPath();
+      ctx.roundRect((W - boxW) / 2, boxY, boxW, boxH, 16);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "600 " + Math.max(16, W * .026) + "px Arial, sans-serif";
+      captionLines.forEach((line, i) => ctx.fillText(line, W / 2, boxY + H * .032 + (i + 1) * lineH));
+    }
   }
 
   ctx.textAlign = "left";
@@ -185,6 +282,98 @@ function updateRenderAvailability() {
     : "Generate or upload a voiceover to enable video export.";
 }
 
+
+function createCaptionWorker() {
+  if (state.captionWorker) return state.captionWorker;
+  const worker = new Worker(new URL("./caption.worker.js", import.meta.url), { type: "module" });
+  worker.onmessage = ({ data }) => {
+    if (data.type === "status") {
+      $("captionStatus").textContent = data.message;
+    } else if (data.type === "progress") {
+      const pct = Math.max(0, Math.min(100, Number(data.percent) || 0));
+      setProgress("caption", pct, data.message || "Preparing word-level captions…");
+    } else if (data.type === "done") {
+      state.captionWords = data.words || [];
+      state.captionBlocks = buildCaptionBlocks(state.captionWords);
+      $("captionProgressWrap").classList.add("hidden");
+      $("syncCaptionsBtn").disabled = false;
+      $("syncCaptionsBtn").textContent = "↻ Re-sync captions";
+      $("captionStatus").textContent = state.captionWords.length + " words aligned";
+      drawPreview();
+      toast("Word-synced karaoke captions are ready.", "success");
+      state.captionResolve?.(state.captionWords);
+      state.captionResolve = null;
+      state.captionReject = null;
+      state.captionPromise = null;
+    } else if (data.type === "error") {
+      $("captionProgressWrap").classList.add("hidden");
+      $("syncCaptionsBtn").disabled = false;
+      $("syncCaptionsBtn").textContent = "↻ Sync word captions";
+      toast(data.message || "Caption alignment failed.", "error");
+      state.captionReject?.(new Error(data.message || "Caption alignment failed."));
+      state.captionResolve = null;
+      state.captionReject = null;
+      state.captionPromise = null;
+    }
+  };
+  worker.onerror = (event) => {
+    $("captionProgressWrap").classList.add("hidden");
+    $("syncCaptionsBtn").disabled = false;
+    $("syncCaptionsBtn").textContent = "↻ Sync word captions";
+    const error = new Error(event.message || "Caption worker failed.");
+    toast(error.message, "error");
+    state.captionReject?.(error);
+    state.captionResolve = null;
+    state.captionReject = null;
+    state.captionPromise = null;
+  };
+  state.captionWorker = worker;
+  return worker;
+}
+
+function audioBufferTo16kMono(buffer) {
+  const targetRate = 16000;
+  const inputRate = buffer.sampleRate;
+  const targetLength = Math.max(1, Math.floor(buffer.length * targetRate / inputRate));
+  const output = new Float32Array(targetLength);
+  const channels = Array.from({ length: buffer.numberOfChannels }, (_, i) => buffer.getChannelData(i));
+  const ratio = inputRate / targetRate;
+  for (let i = 0; i < targetLength; i++) {
+    const position = i * ratio;
+    const left = Math.floor(position);
+    const fraction = position - left;
+    let mixed = 0;
+    for (const channel of channels) {
+      const a = channel[Math.min(left, channel.length - 1)] || 0;
+      const b = channel[Math.min(left + 1, channel.length - 1)] || a;
+      mixed += a + (b - a) * fraction;
+    }
+    output[i] = mixed / channels.length;
+  }
+  return output;
+}
+
+function syncCaptions() {
+  if (!state.voiceBuffer) return Promise.reject(new Error("Generate or upload a voiceover first."));
+  if (state.captionPromise) return state.captionPromise;
+  const waveform = audioBufferTo16kMono(state.voiceBuffer);
+  $("syncCaptionsBtn").disabled = true;
+  $("syncCaptionsBtn").textContent = "Aligning words…";
+  $("captionProgressWrap").classList.remove("hidden");
+  setProgress("caption", 0, "Loading the multilingual Whisper model…");
+
+  state.captionPromise = new Promise((resolve, reject) => {
+    state.captionResolve = resolve;
+    state.captionReject = reject;
+    createCaptionWorker().postMessage({
+      type: "transcribe",
+      audio: waveform,
+      language: $("captionLanguage").value
+    }, [waveform.buffer]);
+  });
+  return state.captionPromise;
+}
+
 function setWorker() {
   if (state.worker) return state.worker;
   const worker = new Worker(new URL("./tts.worker.js", import.meta.url), { type: "module" });
@@ -194,10 +383,15 @@ function setWorker() {
     } else if (data.type === "progress") {
       const pct = data.total ? (data.loaded / data.total) * 100 : 0;
       setProgress("voice", pct, "Downloading Hindi voice model…");
+    } else if (data.type === "synthesis-progress") {
+      const pct = data.total ? (data.current / data.total) * 100 : 0;
+      setProgress("voice", pct, "Generating narration part " + data.current + " of " + data.total + "…");
     } else if (data.type === "done") {
       try {
         state.voiceBlob = data.audio;
         state.voiceBuffer = await decodeAudio(data.audio);
+        state.captionWords = [];
+        state.captionBlocks = [];
         const url = URL.createObjectURL(data.audio);
         $("voicePlayer").src = url;
         $("voiceDownload").href = url;
@@ -232,7 +426,7 @@ function setWorker() {
 $("generateVoice").addEventListener("click", () => {
   const text = $("scriptInput").value.trim();
   if (!text) return toast("Paste your script first.", "error");
-  if (text.length > 7000) return toast("For phone memory, keep the first pass under 7,000 characters.", "error");
+  if (text.length > 70000) return toast("This script is too long for one mobile voice job. Split it into chapters.", "error");
   $("generateVoice").disabled = true;
   $("generateVoice").innerHTML = '<span class="spinner"></span> Working…';
   $("voiceProgressWrap").classList.remove("hidden");
@@ -247,6 +441,8 @@ $("voiceUpload").addEventListener("change", async (event) => {
   try {
     state.voiceBlob = file;
     state.voiceBuffer = await decodeAudio(file);
+    state.captionWords = [];
+    state.captionBlocks = [];
     const url = URL.createObjectURL(file);
     $("voicePlayer").src = url;
     $("voiceDownload").href = url;
@@ -299,6 +495,9 @@ $("imageUpload").addEventListener("change", async (event) => {
 $("scriptInput").addEventListener("input", updateCounts);
 $("videoTitle").addEventListener("input", drawPreview);
 $("captionsToggle").addEventListener("change", drawPreview);
+$("syncCaptionsBtn").addEventListener("click", () => {
+  syncCaptions().catch(() => {});
+});
 
 $("aspectSelect").addEventListener("change", () => {
   const ratio = $("aspectSelect").value;
@@ -325,7 +524,14 @@ $("renderBtn").addEventListener("click", async () => {
     return toast("This browser does not support local video recording. Try the latest Chrome.", "error");
   }
   const duration = state.voiceBuffer.duration;
-  if (duration > 600) return toast("For reliable phone rendering, export videos under 10 minutes.", "error");
+  if ($("captionsToggle").checked && !state.captionWords.length) {
+    try {
+      await syncCaptions();
+    } catch {
+      $("renderBtn").disabled = false;
+      return;
+    }
+  }
   const mimeType = recorderType();
   if (!mimeType) return toast("WebM export is not supported in this browser.", "error");
 
@@ -466,6 +672,8 @@ $("resetBtn").addEventListener("click", () => {
   $("videoTitle").value = "आख़िरी ट्रेन — प्लेटफ़ॉर्म नंबर 0";
   state.voiceBlob = null;
   state.voiceBuffer = null;
+  state.captionWords = [];
+  state.captionBlocks = [];
   state.musicBuffer = null;
   state.images = [];
   $("voiceResult").classList.add("hidden");
