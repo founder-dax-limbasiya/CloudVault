@@ -109,3 +109,11 @@ button,a,label{ -webkit-tap-highlight-color:transparent}
 .hidden{display:none!important}
 @media(max-width:900px){.workspace{grid-template-columns:1fr}.preview-column{position:static}.preview-column{order:-1}.preview-panel{padding:15px}.preview-column .canvas-frame{max-width:620px}.shell{padding:28px 16px}.intro{margin-bottom:20px}}
 @media(max-width:520px){.topbar{height:62px;padding:0 15px}.local-pill{font-size:8px}.shell{padding:24px 12px 22px}.intro h1{font-size:42px}.intro p{font-size:12px}.panel{padding:15px;border-radius:14px}.script-input{min-height:200px}.section-head h2{font-size:14px}.footer{font-size:8px;flex-direction:column}.setting-grid{gap:8px}.text-input{font-size:12px}.preview-column{order:-1}.ratio-9-16{max-width:230px}}
+
+.engine-panel .engine-intro{margin-top:-7px;margin-bottom:13px}
+.engine-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.engine-actions .secondary-btn,.engine-actions .primary-btn{min-height:42px}
+.engine-status{margin-top:11px;padding:10px 11px;border:1px solid #30343c;border-radius:9px;background:#111317;color:#9297a1;font-size:10px;line-height:1.5}
+.engine-status.saved{border-color:#3c5944;color:#a9c9ae}
+.brief-btn{width:100%;min-height:40px;margin-top:10px}
+@media(max-width:520px){.engine-actions{grid-template-columns:1fr}.engine-actions .primary-btn{min-height:42px}}
