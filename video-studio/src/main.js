@@ -614,6 +614,86 @@ $("renderBtn").addEventListener("click", async () => {
   }
 });
 
+
+function normalizeEngineUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("Paste your ChangJi engine address first.");
+  const url = new URL(raw.includes("://") ? raw : "https://" + raw);
+  if (!["https:", "http:"].includes(url.protocol)) throw new Error("Use an HTTP or HTTPS engine address.");
+  if (url.username || url.password) throw new Error("Do not put credentials inside the engine URL.");
+  return url.origin;
+}
+
+function loadEngineUrl() {
+  try { return localStorage.getItem("sceneforge.changji.url") || ""; } catch { return ""; }
+}
+
+function saveEngineUrl() {
+  try {
+    const url = normalizeEngineUrl($("filmEngineUrl").value);
+    $("filmEngineUrl").value = url;
+    localStorage.setItem("sceneforge.changji.url", url);
+    $("engineStatus").textContent = "Engine address saved on this device. Open it to check that ChangJi is running.";
+    $("engineStatus").classList.add("saved");
+    toast("GPU engine address saved on this device.", "success");
+    return url;
+  } catch (error) {
+    toast(error.message, "error");
+    return "";
+  }
+}
+
+function exportFilmBrief() {
+  const script = $("scriptInput").value.trim();
+  if (!script) return toast("Add a script before exporting the film brief.", "error");
+  const scenes = splitScenes(script);
+  const brief = {
+    format: "sceneforge-film-brief",
+    version: 1,
+    createdAt: new Date().toISOString(),
+    title: $("videoTitle").value.trim() || "Untitled film",
+    language: $("captionLanguage").value || "auto",
+    aspectRatio: $("aspectSelect").value,
+    subtitleStyle: $("captionsToggle").checked ? "word-synced-karaoke-white-yellow" : "off",
+    productionIntent: "Generate a complete long-form film. Do not impose a 7-minute limit. Preserve character, wardrobe and location continuity across shots.",
+    narrationScript: script,
+    sceneDraft: scenes.map((text, index) => ({
+      scene: index + 1,
+      narration: text,
+      visualPrompt: "Create a cinematic visual for this narration. Maintain continuity with recurring characters, locations, props and lighting established in earlier scenes."
+    })),
+    notes: [
+      "SceneForge project brief only; not a rendered video.",
+      "Use the connected ChangJi/GPU film engine to write chapters, plan shots, generate first frames and video clips, synthesize dialogue, then assemble the final film.",
+      "Check every model checkpoint's own license before commercial use."
+    ]
+  };
+  const blob = new Blob([JSON.stringify(brief, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = safeFilename(brief.title) + "-film-brief.json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  toast("Full-film project brief exported. No upload was made.", "success");
+}
+
+$("filmEngineUrl").value = loadEngineUrl();
+if ($("filmEngineUrl").value) {
+  $("engineStatus").textContent = "Saved engine address found. Open it to confirm the GPU engine is online.";
+  $("engineStatus").classList.add("saved");
+}
+$("saveEngineBtn").addEventListener("click", saveEngineUrl);
+$("openEngineBtn").addEventListener("click", () => {
+  const url = saveEngineUrl();
+  if (!url) return;
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) toast("Popup blocked. Copy the saved engine address and open it in a new tab.", "error");
+});
+$("filmBriefBtn").addEventListener("click", exportFilmBrief);
+
 function safeFilename(name) {
   return (name || "sceneforge-video").replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "sceneforge-video";
 }
