@@ -233,7 +233,7 @@ function drawFrame(time = 0, duration = 1, live = false) {
   heroLines.forEach((line, i) => ctx.fillText(line, W / 2, startY + i * H * .09));
 
   if ($("captionsToggle").checked) {
-    if (state.captionBlocks.length) {
+    if ($("voiceoverToggle").checked && state.captionBlocks.length) {
       drawKaraokeCaption(ctx, findCaptionBlock(time), time, W, H);
     } else {
       const captionLines = wrapText(ctx, text, W * .80).slice(0, 3);
@@ -275,11 +275,16 @@ async function decodeAudio(blob) {
 }
 
 function updateRenderAvailability() {
-  const ready = Boolean(state.voiceBuffer);
+  const hasScript = Boolean($("scriptInput").value.trim());
+  const voiceEnabled = $("voiceoverToggle").checked;
+  const ready = hasScript && (!voiceEnabled || Boolean(state.voiceBuffer));
   $("renderBtn").disabled = !ready;
-  $("renderHint").textContent = ready
-    ? "Ready to render. Your media stays in this browser."
-    : "Generate or upload a voiceover to enable video export.";
+  $("syncCaptionsBtn").disabled = !state.voiceBuffer || !voiceEnabled;
+  $("renderHint").textContent = !hasScript
+    ? "Add a script to start your film."
+    : voiceEnabled && !state.voiceBuffer
+      ? "Generate or upload a voiceover, or switch the voiceover track off."
+      : "Ready. Only the tracks you select will be included in the final video.";
 }
 
 
@@ -495,6 +500,11 @@ $("imageUpload").addEventListener("change", async (event) => {
 $("scriptInput").addEventListener("input", updateCounts);
 $("videoTitle").addEventListener("input", drawPreview);
 $("captionsToggle").addEventListener("change", drawPreview);
+$("voiceoverToggle").addEventListener("change", () => {
+  updateRenderAvailability();
+  drawPreview();
+});
+$("musicToggle").addEventListener("change", updateRenderAvailability);
 $("syncCaptionsBtn").addEventListener("click", () => {
   syncCaptions().catch(() => {});
 });
@@ -519,16 +529,22 @@ function recorderType() {
 }
 
 $("renderBtn").addEventListener("click", async () => {
-  if (!state.voiceBuffer) return;
+  const includeVoice = $("voiceoverToggle").checked && Boolean(state.voiceBuffer);
+  const includeMusic = $("musicToggle").checked && Boolean(state.musicBuffer);
+  if (!includeVoice && !includeMusic && !$("scriptInput").value.trim()) return;
+  if (includeVoice && !state.voiceBuffer) return toast("Generate or upload a voiceover, or switch the voiceover track off.", "error");
   if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
     return toast("This browser does not support local video recording. Try the latest Chrome.", "error");
   }
-  const duration = state.voiceBuffer.duration;
-  if ($("captionsToggle").checked && !state.captionWords.length) {
+
+  // A voice-led film follows the narration length. Without narration, the selected
+  // project target is ten minutes; optional music loops underneath it.
+  const duration = includeVoice ? state.voiceBuffer.duration : 600;
+  if ($("captionsToggle").checked && includeVoice && !state.captionWords.length) {
     try {
       await syncCaptions();
     } catch {
-      $("renderBtn").disabled = false;
+      updateRenderAvailability();
       return;
     }
   }
@@ -540,50 +556,73 @@ $("renderBtn").addEventListener("click", async () => {
   $("outputPanel").classList.add("hidden");
   setProgress("render", 0, "Preparing the scene timeline…");
 
-  let audioContext;
+  let audioContext = null;
   let animationId;
+  let stopTimer;
+  let stream;
+  let combined;
   try {
     const canvas = $("previewCanvas");
-    const stream = canvas.captureStream(24);
-    audioContext = new AudioContext();
-    await audioContext.resume();
-    const destination = audioContext.createMediaStreamDestination();
-    const voiceSource = audioContext.createBufferSource();
-    const voiceGain = audioContext.createGain();
-    voiceGain.gain.value = 1;
-    voiceSource.buffer = state.voiceBuffer;
-    voiceSource.connect(voiceGain).connect(destination);
+    stream = canvas.captureStream(24);
+    const audioTracks = [];
+    let voiceSource = null;
+    let musicSource = null;
+    let startAt = 0;
 
-    let musicSource;
-    if (state.musicBuffer) {
-      musicSource = audioContext.createBufferSource();
-      const musicGain = audioContext.createGain();
-      musicGain.gain.value = .16;
-      musicSource.buffer = state.musicBuffer;
-      musicSource.loop = true;
-      musicSource.connect(musicGain).connect(destination);
+    if (includeVoice || includeMusic) {
+      audioContext = new AudioContext();
+      await audioContext.resume();
+      const destination = audioContext.createMediaStreamDestination();
+      audioTracks.push(...destination.stream.getAudioTracks());
+
+      if (includeVoice) {
+        voiceSource = audioContext.createBufferSource();
+        const voiceGain = audioContext.createGain();
+        voiceGain.gain.value = 1;
+        voiceSource.buffer = state.voiceBuffer;
+        voiceSource.connect(voiceGain).connect(destination);
+      }
+
+      if (includeMusic) {
+        musicSource = audioContext.createBufferSource();
+        const musicGain = audioContext.createGain();
+        musicGain.gain.value = .16;
+        musicSource.buffer = state.musicBuffer;
+        musicSource.loop = true;
+        musicSource.connect(musicGain).connect(destination);
+      }
+      startAt = audioContext.currentTime + .08;
     }
-    const combined = new MediaStream([
+
+    combined = new MediaStream([
       ...stream.getVideoTracks(),
-      ...destination.stream.getAudioTracks()
+      ...audioTracks
     ]);
-    const options = { mimeType, videoBitsPerSecond: Number($("qualitySelect").value) === 480 ? 1600000 : 3500000, audioBitsPerSecond: 128000 };
+    const options = {
+      mimeType,
+      videoBitsPerSecond: Number($("qualitySelect").value) === 480 ? 1600000 : 3500000,
+      audioBitsPerSecond: 128000
+    };
     const recorder = new MediaRecorder(combined, options);
     const chunks = [];
     recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-    const startAt = audioContext.currentTime + .08;
     const started = performance.now();
+
     const renderTick = () => {
-      const t = Math.max(0, audioContext.currentTime - startAt);
+      const t = audioContext
+        ? Math.max(0, audioContext.currentTime - startAt)
+        : Math.max(0, (performance.now() - started) / 1000);
       drawFrame(t, duration);
       setProgress("render", (t / duration) * 100, "Rendering your video…");
       if (t < duration) animationId = requestAnimationFrame(renderTick);
     };
+
     recorder.onstop = async () => {
       cancelAnimationFrame(animationId);
-      stream.getTracks().forEach(track => track.stop());
-      combined.getTracks().forEach(track => track.stop());
-      await audioContext.close().catch(() => {});
+      if (stopTimer) clearTimeout(stopTimer);
+      stream?.getTracks().forEach(track => track.stop());
+      combined?.getTracks().forEach(track => track.stop());
+      if (audioContext && audioContext.state !== "closed") await audioContext.close().catch(() => {});
       const blob = new Blob(chunks, { type: mimeType });
       state.outputBlob = blob;
       if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
@@ -593,27 +632,35 @@ $("renderBtn").addEventListener("click", async () => {
       $("videoDownload").download = safeFilename($("videoTitle").value) + ".webm";
       $("outputPanel").classList.remove("hidden");
       $("renderProgressWrap").classList.add("hidden");
-      $("renderBtn").disabled = false;
+      updateRenderAvailability();
       $("renderStatus").textContent = "Video ready";
       setProgress("render", 100, "Video ready");
       toast("Your video is ready to download.", "success");
       drawPreview();
     };
-    recorder.onerror = () => toast("The browser stopped the video recording unexpectedly.", "error");
+
+    recorder.onerror = () => {
+      toast("The browser stopped the video recording unexpectedly.", "error");
+      if (recorder.state !== "inactive") recorder.stop();
+    };
     recorder.start(1000);
-    voiceSource.start(startAt);
-    musicSource?.start(startAt);
+    if (voiceSource) voiceSource.start(startAt);
+    if (musicSource) musicSource.start(startAt);
     renderTick();
-    setTimeout(() => { if (recorder.state !== "inactive") recorder.stop(); }, duration * 1000 + 350);
+    stopTimer = setTimeout(() => {
+      if (recorder.state !== "inactive") recorder.stop();
+    }, duration * 1000 + 350);
   } catch (error) {
     cancelAnimationFrame(animationId);
+    if (stopTimer) clearTimeout(stopTimer);
+    stream?.getTracks().forEach(track => track.stop());
+    combined?.getTracks().forEach(track => track.stop());
     if (audioContext && audioContext.state !== "closed") await audioContext.close().catch(() => {});
-    $("renderBtn").disabled = false;
     $("renderProgressWrap").classList.add("hidden");
+    updateRenderAvailability();
     toast("Video export failed: " + (error?.message || "unknown error"), "error");
   }
 });
-
 
 function normalizeEngineUrl(value) {
   const raw = String(value || "").trim();
@@ -655,7 +702,14 @@ function exportFilmBrief() {
     language: $("captionLanguage").value || "auto",
     aspectRatio: $("aspectSelect").value,
     subtitleStyle: $("captionsToggle").checked ? "word-synced-karaoke-white-yellow" : "off",
-    productionIntent: "Generate a complete long-form film. Do not impose a 7-minute limit. Preserve character, wardrobe and location continuity across shots.",
+    audioSettings: {
+      includeVoiceover: $("voiceoverToggle").checked,
+      includeBackgroundMusic: $("musicToggle").checked,
+      includeSubtitles: $("captionsToggle").checked,
+      targetFilmLengthMinutes: 10
+    },
+    targetDurationMinutes: 10,
+    productionIntent: "Generate a complete film targeting ten minutes. Preserve character, wardrobe and location continuity across shots.",
     narrationScript: script,
     sceneDraft: scenes.map((text, index) => ({
       scene: index + 1,
@@ -752,6 +806,9 @@ $("resetBtn").addEventListener("click", () => {
   $("videoTitle").value = "आख़िरी ट्रेन — प्लेटफ़ॉर्म नंबर 0";
   state.voiceBlob = null;
   state.voiceBuffer = null;
+  $("voiceoverToggle").checked = true;
+  $("musicToggle").checked = true;
+  $("captionsToggle").checked = true;
   state.captionWords = [];
   state.captionBlocks = [];
   state.musicBuffer = null;
