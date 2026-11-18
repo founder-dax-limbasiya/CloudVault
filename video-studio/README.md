@@ -37,7 +37,7 @@ The configured Rohan Hindi ONNX weights are fetched from [rhasspy/piper-voices](
 - This is a local scene compositor, not a diffusion text-to-video generator. It animates uploaded photos or creates graphic/text-based scenes.
 - The first TTS model download needs an internet connection and device storage.
 - MP4 conversion is heavier than WebM and can fail on low-memory phones; WebM remains available as a fallback.
-- Video render duration is limited to 10 minutes for phone stability.
+- Browser rendering is constrained by device memory, storage and battery. For reliable long-form films, a persistent queued GPU render worker is required.
 
 ## Deployment
 
@@ -58,3 +58,9 @@ The app is a Vite static site and can be deployed to Vercel with the project roo
 - Whisper ONNX multilingual tiny: https://huggingface.co/onnx-community/whisper-tiny
 - ChangJi: https://github.com/changji-ai/ChangJi (Apache-2.0 application; downloaded model weights have separate licenses)
 - AI video model survey: https://github.com/backblaze-labs/awesome-video-generation
+
+
+## Mobile and hosted-rendering notes
+
+- Browser ASR is configured to use ONNX Runtime Web (WASM/WebGPU). The Vercel build skips the optional Node CUDA execution-provider download; CUDA is not needed to run inference in the browser.
+- Long-form rendering from a mobile browser can still be interrupted by memory pressure or the browser suspending the tab. Removing a software duration cap does not make phone memory unlimited.
