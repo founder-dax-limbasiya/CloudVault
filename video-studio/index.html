@@ -98,7 +98,7 @@
               <div id="imageList" class="image-list"></div>
               <label class="upload-line music-upload" for="musicUpload"><span class="upload-icon">♫</span><span><strong>Background music</strong><small>Optional audio track, mixed under narration</small></span><input id="musicUpload" type="file" accept="audio/*" /></label>
               <div id="musicName" class="file-note hidden"></div>
-              <label class="check-row track-toggle"><input id="musicToggle" type="checkbox" checked /><span>Include background music in final video</span></label>
+
             </section>
 
 
@@ -126,23 +126,7 @@
                 <div><label class="field-label" for="aspectSelect">Aspect ratio</label><select id="aspectSelect" class="text-input"><option value="16:9">16:9 · YouTube</option><option value="9:16">9:16 · Shorts / Reels</option><option value="1:1">1:1 · Square</option></select></div>
                 <div><label class="field-label" for="qualitySelect">Resolution</label><select id="qualitySelect" class="text-input"><option value="720">720p · Recommended</option><option value="480">480p · Faster export</option></select></div>
               </div>
-              <label class="check-row track-toggle"><input id="captionsToggle" type="checkbox" checked /><span>Include subtitles / captions in final video</span></label>
-              <div class="caption-tools">
-                <label class="caption-language">Caption language
-                  <select id="captionLanguage" class="text-input">
-                    <option value="">Auto detect</option>
-                    <option value="hindi">Hindi</option>
-                    <option value="english">English</option>
-                    <option value="gujarati">Gujarati</option>
-                  </select>
-                </label>
-                <button id="syncCaptionsBtn" class="secondary-btn" type="button">↻ Sync word captions</button>
-              </div>
-              <div id="captionProgressWrap" class="progress-wrap hidden">
-                <div class="progress-label"><span id="captionStatus">Loading speech alignment…</span><strong id="captionPercent">0%</strong></div>
-                <div class="progress-track"><div id="captionProgress" class="progress-fill"></div></div>
-              </div>
-              <p class="fineprint">Uses Whisper word timestamps locally in your browser. First use downloads the multilingual model and caches it.</p>
+              <p class="fineprint">The visual film is generated first. You can choose or replace its voiceover, soundtrack and subtitles after generation.</p>
               <button id="renderBtn" class="primary-btn full-btn render-btn" type="button" disabled><span class="btn-icon">▶</span> Create video</button>
               <p id="renderHint" class="fineprint">Generate or upload a voiceover to enable video export.</p>
               <div id="renderProgressWrap" class="progress-wrap hidden">
@@ -167,7 +151,31 @@
             <section id="outputPanel" class="panel output-panel hidden">
               <div class="section-head"><div><span class="step">DONE</span><h2>Your video</h2></div><span class="success-tag">READY</span></div>
               <video id="videoOutput" controls playsinline></video>
-              <div class="output-actions"><a id="videoDownload" class="primary-btn download-btn" download="sceneforge-video.webm">↓ Download video</a><button id="mp4Btn" class="secondary-btn" type="button">Convert to MP4</button></div>
+              <div class="post-editor">
+                <div class="section-head"><div><span class="step">POST</span><h2>Edit after generation</h2></div><span class="muted">RE-EXPORT</span></div>
+                <p class="fineprint">Change these tracks anytime. The visual master stays saved in this session — no need to regenerate the scenes.</p>
+                <label class="check-row track-toggle"><input id="postVoiceoverToggle" type="checkbox" /><span>Include voiceover</span></label>
+                <label class="check-row track-toggle"><input id="postMusicToggle" type="checkbox" /><span>Include background music</span></label>
+                <label class="check-row track-toggle"><input id="captionsToggle" type="checkbox" checked /><span>Include subtitles / captions</span></label>
+                <div class="caption-tools">
+                  <label class="caption-language">Subtitle language
+                    <select id="captionLanguage" class="text-input">
+                      <option value="">Auto detect</option>
+                      <option value="hindi">Hindi</option>
+                      <option value="english">English</option>
+                      <option value="gujarati">Gujarati</option>
+                    </select>
+                  </label>
+                  <button id="syncCaptionsBtn" class="secondary-btn" type="button">↻ Sync word captions</button>
+                </div>
+                <div id="captionProgressWrap" class="progress-wrap hidden">
+                  <div class="progress-label"><span id="captionStatus">Loading speech alignment…</span><strong id="captionPercent">0%</strong></div>
+                  <div class="progress-track"><div id="captionProgress" class="progress-fill"></div></div>
+                </div>
+                <button id="applyPostEditsBtn" class="primary-btn full-btn brief-btn" type="button">Apply edits & export final video</button>
+                <p id="postEditHint" class="fineprint">Choose the tracks you want in the finished video.</p>
+              </div>
+              <div class="output-actions"><a id="videoDownload" class="primary-btn download-btn" download="sceneforge-video.webm">↓ Download final video</a><button id="mp4Btn" class="secondary-btn" type="button">Convert to MP4</button></div>
               <p id="mp4Hint" class="fineprint">WebM works on YouTube. MP4 conversion is optional and may be slow on phones.</p>
             </section>
             <section class="panel privacy-card">

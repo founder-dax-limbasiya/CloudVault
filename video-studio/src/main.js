@@ -14,6 +14,10 @@ const state = {
   voiceBlob: null,
   voiceBuffer: null,
   musicBuffer: null,
+  masterVideoBlob: null,
+  masterVideoUrl: null,
+  masterDuration: 0,
+  masterVideoElement: null,
   images: [],
   outputBlob: null,
   outputUrl: null,
@@ -165,7 +169,7 @@ function drawKaraokeCaption(ctx, block, time, W, H) {
   ctx.restore();
 }
 
-function drawFrame(time = 0, duration = 1, live = false) {
+function drawFrame(time = 0, duration = 1, live = false, options = {}) {
   const canvas = $("previewCanvas");
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
@@ -232,8 +236,8 @@ function drawFrame(time = 0, duration = 1, live = false) {
   const startY = H * .46 - (heroLines.length - 1) * H * .045;
   heroLines.forEach((line, i) => ctx.fillText(line, W / 2, startY + i * H * .09));
 
-  if ($("captionsToggle").checked) {
-    if ($("voiceoverToggle").checked && state.captionBlocks.length) {
+  if (options.includeCaptions !== false && $("captionsToggle").checked) {
+    if ($("postVoiceoverToggle").checked && state.captionBlocks.length) {
       drawKaraokeCaption(ctx, findCaptionBlock(time), time, W, H);
     } else {
       const captionLines = wrapText(ctx, text, W * .80).slice(0, 3);
@@ -275,16 +279,24 @@ async function decodeAudio(blob) {
 }
 
 function updateRenderAvailability() {
-  const hasScript = Boolean($("scriptInput").value.trim());
-  const voiceEnabled = $("voiceoverToggle").checked;
-  const ready = hasScript && (!voiceEnabled || Boolean(state.voiceBuffer));
+  const ready = Boolean($("scriptInput").value.trim());
   $("renderBtn").disabled = !ready;
-  $("syncCaptionsBtn").disabled = !state.voiceBuffer || !voiceEnabled;
-  $("renderHint").textContent = !hasScript
-    ? "Add a script to start your film."
-    : voiceEnabled && !state.voiceBuffer
-      ? "Generate or upload a voiceover, or switch the voiceover track off."
-      : "Ready. Only the tracks you select will be included in the final video.";
+  $("renderHint").textContent = ready
+    ? "Generate the visual film first. Voiceover, music and subtitles can be edited afterwards."
+    : "Add a script to start your film.";
+  updatePostTrackAvailability();
+}
+
+function updatePostTrackAvailability() {
+  const voiceToggle = $("postVoiceoverToggle");
+  const musicToggle = $("postMusicToggle");
+  const captionsToggle = $("captionsToggle");
+  if (!voiceToggle || !musicToggle || !captionsToggle) return;
+  voiceToggle.disabled = !state.voiceBuffer;
+  musicToggle.disabled = !state.musicBuffer;
+  if (!state.voiceBuffer) voiceToggle.checked = false;
+  if (!state.musicBuffer) musicToggle.checked = false;
+  $("syncCaptionsBtn").disabled = !state.voiceBuffer;
 }
 
 
@@ -404,6 +416,10 @@ function setWorker() {
         $("voiceProgressWrap").classList.add("hidden");
         $("voiceStatus").textContent = "Voiceover ready";
         updateRenderAvailability();
+        if ($("outputPanel") && !$("outputPanel").classList.contains("hidden")) {
+          $("postVoiceoverToggle").checked = true;
+          updatePostTrackAvailability();
+        }
         toast("Hindi voiceover generated on this device.", "success");
       } catch (error) {
         toast("Audio could not be decoded: " + error.message, "error");
@@ -454,6 +470,10 @@ $("voiceUpload").addEventListener("change", async (event) => {
     $("voiceDownload").download = file.name;
     $("voiceResult").classList.remove("hidden");
     updateRenderAvailability();
+    if ($("outputPanel") && !$("outputPanel").classList.contains("hidden")) {
+      $("postVoiceoverToggle").checked = true;
+      updatePostTrackAvailability();
+    }
     toast("Your voiceover is ready.", "success");
   } catch (error) {
     toast("This audio format could not be opened by the browser.", "error");
@@ -467,6 +487,10 @@ $("musicUpload").addEventListener("change", async (event) => {
     state.musicBuffer = await decodeAudio(file);
     $("musicName").textContent = "♫  " + file.name;
     $("musicName").classList.remove("hidden");
+    if ($("outputPanel") && !$("outputPanel").classList.contains("hidden")) {
+      $("postMusicToggle").checked = true;
+      updatePostTrackAvailability();
+    }
     toast("Background soundtrack added.", "success");
   } catch {
     toast("This music file could not be opened.", "error");
@@ -500,13 +524,17 @@ $("imageUpload").addEventListener("change", async (event) => {
 $("scriptInput").addEventListener("input", updateCounts);
 $("videoTitle").addEventListener("input", drawPreview);
 $("captionsToggle").addEventListener("change", drawPreview);
-$("voiceoverToggle").addEventListener("change", () => {
-  updateRenderAvailability();
-  drawPreview();
+["postVoiceoverToggle", "postMusicToggle", "captionsToggle"].forEach((id) => {
+  $(id).addEventListener("change", () => {
+    $("postEditHint").textContent = "Track settings changed. Apply edits to update the final video.";
+    drawPreview();
+  });
 });
-$("musicToggle").addEventListener("change", updateRenderAvailability);
 $("syncCaptionsBtn").addEventListener("click", () => {
   syncCaptions().catch(() => {});
+});
+$("applyPostEditsBtn").addEventListener("click", () => {
+  renderFinalVideo().catch((error) => toast(error.message || "Could not apply the edits.", "error"));
 });
 
 $("aspectSelect").addEventListener("change", () => {
@@ -528,100 +556,196 @@ function recorderType() {
   return candidates.find(type => MediaRecorder.isTypeSupported(type)) || "";
 }
 
-$("renderBtn").addEventListener("click", async () => {
-  const includeVoice = $("voiceoverToggle").checked && Boolean(state.voiceBuffer);
-  const includeMusic = $("musicToggle").checked && Boolean(state.musicBuffer);
-  if (!includeVoice && !includeMusic && !$("scriptInput").value.trim()) return;
-  if (includeVoice && !state.voiceBuffer) return toast("Generate or upload a voiceover, or switch the voiceover track off.", "error");
+async function renderMasterFilm() {
   if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
-    return toast("This browser does not support local video recording. Try the latest Chrome.", "error");
+    throw new Error("This browser does not support local video recording. Try the latest Chrome.");
   }
-
-  // A voice-led film follows the narration length. Without narration, the selected
-  // project target is ten minutes; optional music loops underneath it.
-  const duration = includeVoice ? state.voiceBuffer.duration : 600;
-  if ($("captionsToggle").checked && includeVoice && !state.captionWords.length) {
-    try {
-      await syncCaptions();
-    } catch {
-      updateRenderAvailability();
-      return;
-    }
-  }
+  const duration = state.voiceBuffer?.duration || 600;
   const mimeType = recorderType();
-  if (!mimeType) return toast("WebM export is not supported in this browser.", "error");
+  if (!mimeType) throw new Error("WebM export is not supported in this browser.");
 
   $("renderBtn").disabled = true;
   $("renderProgressWrap").classList.remove("hidden");
   $("outputPanel").classList.add("hidden");
-  setProgress("render", 0, "Preparing the scene timeline…");
+  setProgress("render", 0, "Generating the clean visual master…");
 
-  let audioContext = null;
+  const canvas = $("previewCanvas");
+  const stream = canvas.captureStream(24);
+  const recorder = new MediaRecorder(stream, {
+    mimeType,
+    videoBitsPerSecond: Number($("qualitySelect").value) === 480 ? 1600000 : 3500000
+  });
+  const chunks = [];
   let animationId;
   let stopTimer;
-  let stream;
-  let combined;
-  try {
-    const canvas = $("previewCanvas");
-    stream = canvas.captureStream(24);
-    const audioTracks = [];
-    let voiceSource = null;
-    let musicSource = null;
-    let startAt = 0;
+  const started = performance.now();
 
+  return new Promise((resolve, reject) => {
+    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+    recorder.onerror = () => {
+      cancelAnimationFrame(animationId);
+      if (stopTimer) clearTimeout(stopTimer);
+      stream.getTracks().forEach(track => track.stop());
+      reject(new Error("The browser stopped the master-video recording unexpectedly."));
+    };
+    recorder.onstop = () => {
+      cancelAnimationFrame(animationId);
+      if (stopTimer) clearTimeout(stopTimer);
+      stream.getTracks().forEach(track => track.stop());
+      state.masterVideoBlob = new Blob(chunks, { type: mimeType });
+      if (state.masterVideoUrl) URL.revokeObjectURL(state.masterVideoUrl);
+      state.masterVideoUrl = URL.createObjectURL(state.masterVideoBlob);
+      state.masterDuration = duration;
+      state.masterVideoElement = null;
+      $("renderProgressWrap").classList.add("hidden");
+      $("outputPanel").classList.remove("hidden");
+      $("postVoiceoverToggle").checked = Boolean(state.voiceBuffer);
+      $("postMusicToggle").checked = Boolean(state.musicBuffer);
+      $("captionsToggle").checked = true;
+      updatePostTrackAvailability();
+      $("renderBtn").disabled = false;
+      $("postEditHint").textContent = "Visual master is ready. Choose your tracks and apply edits below.";
+      drawPreview();
+      resolve();
+    };
+
+    const renderTick = () => {
+      const t = Math.min(duration, (performance.now() - started) / 1000);
+      drawFrame(t, duration, false, { includeCaptions: false });
+      setProgress("render", (t / duration) * 100, "Creating the visual master…");
+      if (t < duration) animationId = requestAnimationFrame(renderTick);
+      else if (recorder.state !== "inactive") recorder.stop();
+    };
+
+    recorder.start(1000);
+    renderTick();
+    stopTimer = setTimeout(() => {
+      if (recorder.state !== "inactive") recorder.stop();
+    }, duration * 1000 + 500);
+  });
+}
+
+async function renderFinalVideo() {
+  if (!state.masterVideoUrl) throw new Error("Generate the visual film before applying track edits.");
+  const includeVoice = $("postVoiceoverToggle").checked && Boolean(state.voiceBuffer);
+  const includeMusic = $("postMusicToggle").checked && Boolean(state.musicBuffer);
+  const includeCaptions = $("captionsToggle").checked;
+
+  if (includeCaptions && includeVoice && !state.captionWords.length) {
+    try {
+      await syncCaptions();
+    } catch {
+      toast("Word sync failed; using scene captions instead.", "info");
+    }
+  }
+
+  const mimeType = recorderType();
+  if (!mimeType) throw new Error("WebM export is not supported in this browser.");
+  $("applyPostEditsBtn").disabled = true;
+  $("applyPostEditsBtn").textContent = "Applying edits…";
+  $("renderProgressWrap").classList.remove("hidden");
+  setProgress("render", 0, "Preparing your final mix…");
+
+  const video = document.createElement("video");
+  video.src = state.masterVideoUrl;
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  await new Promise((resolve, reject) => {
+    if (video.readyState >= 1) return resolve();
+    video.onloadedmetadata = resolve;
+    video.onerror = () => reject(new Error("Could not open the visual master for editing."));
+  });
+  const duration = Number.isFinite(video.duration) && video.duration > 0
+    ? video.duration
+    : state.masterDuration;
+  if (video.currentTime !== 0) video.currentTime = 0;
+
+  const canvas = $("previewCanvas");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const visualStream = canvas.captureStream(24);
+  let audioContext = null;
+  let audioDestination = null;
+  let voiceSource = null;
+  let musicSource = null;
+  let combined = visualStream;
+  let animationId;
+  let stopTimer;
+  let started = performance.now();
+  let startAt = 0;
+
+  try {
     if (includeVoice || includeMusic) {
       audioContext = new AudioContext();
       await audioContext.resume();
-      const destination = audioContext.createMediaStreamDestination();
-      audioTracks.push(...destination.stream.getAudioTracks());
-
+      audioDestination = audioContext.createMediaStreamDestination();
       if (includeVoice) {
         voiceSource = audioContext.createBufferSource();
-        const voiceGain = audioContext.createGain();
-        voiceGain.gain.value = 1;
+        const gain = audioContext.createGain();
+        gain.gain.value = 1;
         voiceSource.buffer = state.voiceBuffer;
-        voiceSource.connect(voiceGain).connect(destination);
+        voiceSource.connect(gain).connect(audioDestination);
       }
-
       if (includeMusic) {
         musicSource = audioContext.createBufferSource();
-        const musicGain = audioContext.createGain();
-        musicGain.gain.value = .16;
+        const gain = audioContext.createGain();
+        gain.gain.value = .16;
         musicSource.buffer = state.musicBuffer;
         musicSource.loop = true;
-        musicSource.connect(musicGain).connect(destination);
+        musicSource.connect(gain).connect(audioDestination);
       }
-      startAt = audioContext.currentTime + .08;
+      combined = new MediaStream([
+        ...visualStream.getVideoTracks(),
+        ...audioDestination.stream.getAudioTracks()
+      ]);
+      startAt = audioContext.currentTime + .12;
     }
 
-    combined = new MediaStream([
-      ...stream.getVideoTracks(),
-      ...audioTracks
-    ]);
-    const options = {
+    const recorder = new MediaRecorder(combined, {
       mimeType,
       videoBitsPerSecond: Number($("qualitySelect").value) === 480 ? 1600000 : 3500000,
       audioBitsPerSecond: 128000
-    };
-    const recorder = new MediaRecorder(combined, options);
+    });
     const chunks = [];
-    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-    const started = performance.now();
 
-    const renderTick = () => {
-      const t = audioContext
-        ? Math.max(0, audioContext.currentTime - startAt)
-        : Math.max(0, (performance.now() - started) / 1000);
-      drawFrame(t, duration);
-      setProgress("render", (t / duration) * 100, "Rendering your video…");
-      if (t < duration) animationId = requestAnimationFrame(renderTick);
+    const paintSubtitles = (time) => {
+      if (!includeCaptions) return;
+      const block = includeVoice && state.captionBlocks.length ? findCaptionBlock(time) : null;
+      if (block) {
+        drawKaraokeCaption(ctx, block, time, W, H);
+        return;
+      }
+      const scenes = splitScenes($("scriptInput").value);
+      const idx = Math.min(Math.max(0, scenes.length - 1), Math.floor((time / Math.max(1, duration)) * Math.max(1, scenes.length)));
+      const line = scenes[idx] || "";
+      if (!line) return;
+      const lines = wrapText(ctx, line, W * .82).slice(0, 2);
+      const fontSize = Math.max(18, W * .026);
+      const lineH = fontSize * 1.35;
+      const boxH = lines.length * lineH + fontSize * .8;
+      const y = H * .82 - boxH / 2;
+      ctx.fillStyle = "rgba(8,10,15,.76)";
+      ctx.beginPath();
+      ctx.roundRect(W * .06, y, W * .88, boxH, 14);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "700 " + fontSize + "px Arial, sans-serif";
+      ctx.textAlign = "center";
+      lines.forEach((lineText, i) => ctx.fillText(lineText, W / 2, y + fontSize * .7 + (i + 1) * lineH * .72));
     };
 
+    const finish = () => {
+      if (recorder.state !== "inactive") recorder.stop();
+    };
+    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+    recorder.onerror = () => finish();
     recorder.onstop = async () => {
       cancelAnimationFrame(animationId);
       if (stopTimer) clearTimeout(stopTimer);
-      stream?.getTracks().forEach(track => track.stop());
-      combined?.getTracks().forEach(track => track.stop());
+      video.pause();
+      visualStream.getTracks().forEach(track => track.stop());
+      if (combined !== visualStream) combined.getTracks().forEach(track => track.stop());
       if (audioContext && audioContext.state !== "closed") await audioContext.close().catch(() => {});
       const blob = new Blob(chunks, { type: mimeType });
       state.outputBlob = blob;
@@ -630,35 +754,55 @@ $("renderBtn").addEventListener("click", async () => {
       $("videoOutput").src = state.outputUrl;
       $("videoDownload").href = state.outputUrl;
       $("videoDownload").download = safeFilename($("videoTitle").value) + ".webm";
+      $("videoDownload").textContent = "↓ Download final video";
       $("outputPanel").classList.remove("hidden");
       $("renderProgressWrap").classList.add("hidden");
-      updateRenderAvailability();
-      $("renderStatus").textContent = "Video ready";
-      setProgress("render", 100, "Video ready");
-      toast("Your video is ready to download.", "success");
+      $("applyPostEditsBtn").disabled = false;
+      $("applyPostEditsBtn").textContent = "Apply edits & export final video";
+      $("postEditHint").textContent = "Final video updated. Change any track and apply again without regenerating the visuals.";
+      setProgress("render", 100, "Final video ready");
+      toast("Final video updated with your selected tracks.", "success");
       drawPreview();
     };
 
-    recorder.onerror = () => {
-      toast("The browser stopped the video recording unexpectedly.", "error");
-      if (recorder.state !== "inactive") recorder.stop();
-    };
     recorder.start(1000);
     if (voiceSource) voiceSource.start(startAt);
     if (musicSource) musicSource.start(startAt);
+    await video.play();
+
+    const renderTick = () => {
+      const t = Math.min(duration, video.currentTime || 0);
+      ctx.clearRect(0, 0, W, H);
+      if (video.readyState >= 2) ctx.drawImage(video, 0, 0, W, H);
+      paintSubtitles(t);
+      setProgress("render", (t / duration) * 100, "Applying voice, music and subtitles…");
+      if (!video.ended && t < duration) animationId = requestAnimationFrame(renderTick);
+      else finish();
+    };
     renderTick();
-    stopTimer = setTimeout(() => {
-      if (recorder.state !== "inactive") recorder.stop();
-    }, duration * 1000 + 350);
+    stopTimer = setTimeout(finish, duration * 1000 + 2500);
   } catch (error) {
     cancelAnimationFrame(animationId);
     if (stopTimer) clearTimeout(stopTimer);
-    stream?.getTracks().forEach(track => track.stop());
-    combined?.getTracks().forEach(track => track.stop());
+    video.pause();
+    visualStream.getTracks().forEach(track => track.stop());
+    if (combined !== visualStream) combined.getTracks().forEach(track => track.stop());
     if (audioContext && audioContext.state !== "closed") await audioContext.close().catch(() => {});
     $("renderProgressWrap").classList.add("hidden");
-    updateRenderAvailability();
-    toast("Video export failed: " + (error?.message || "unknown error"), "error");
+    $("applyPostEditsBtn").disabled = false;
+    $("applyPostEditsBtn").textContent = "Apply edits & export final video";
+    throw error;
+  }
+}
+
+$("renderBtn").addEventListener("click", async () => {
+  try {
+    await renderMasterFilm();
+    await renderFinalVideo();
+  } catch (error) {
+    $("renderBtn").disabled = false;
+    $("renderProgressWrap").classList.add("hidden");
+    toast(error.message || "Video generation failed.", "error");
   }
 });
 
@@ -703,10 +847,10 @@ function exportFilmBrief() {
     aspectRatio: $("aspectSelect").value,
     subtitleStyle: $("captionsToggle").checked ? "word-synced-karaoke-white-yellow" : "off",
     audioSettings: {
-      includeVoiceover: $("voiceoverToggle").checked,
-      includeBackgroundMusic: $("musicToggle").checked,
-      includeSubtitles: $("captionsToggle").checked,
-      targetFilmLengthMinutes: 10
+      editableAfterGeneration: true,
+      voiceover: "choose-on-or-off-after-visual-generation",
+      backgroundMusic: "choose-on-or-off-or-replace-after-visual-generation",
+      subtitles: "choose-on-or-off-and-resync-after-visual-generation"
     },
     targetDurationMinutes: 10,
     productionIntent: "Generate a complete film targeting ten minutes. Preserve character, wardrobe and location continuity across shots.",
@@ -806,8 +950,13 @@ $("resetBtn").addEventListener("click", () => {
   $("videoTitle").value = "आख़िरी ट्रेन — प्लेटफ़ॉर्म नंबर 0";
   state.voiceBlob = null;
   state.voiceBuffer = null;
-  $("voiceoverToggle").checked = true;
-  $("musicToggle").checked = true;
+  state.masterVideoBlob = null;
+  state.masterDuration = 0;
+  state.masterVideoElement = null;
+  if (state.masterVideoUrl) URL.revokeObjectURL(state.masterVideoUrl);
+  state.masterVideoUrl = null;
+  $("postVoiceoverToggle").checked = false;
+  $("postMusicToggle").checked = false;
   $("captionsToggle").checked = true;
   state.captionWords = [];
   state.captionBlocks = [];
@@ -817,6 +966,9 @@ $("resetBtn").addEventListener("click", () => {
   $("imageList").innerHTML = "";
   $("musicName").classList.add("hidden");
   $("outputPanel").classList.add("hidden");
+  state.outputBlob = null;
+  if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
+  state.outputUrl = null;
   updateRenderAvailability();
   updateCounts();
   toast("Sample project restored.");

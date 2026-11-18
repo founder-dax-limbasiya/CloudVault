@@ -121,3 +121,12 @@ button,a,label{ -webkit-tap-highlight-color:transparent}
 .track-toggle{margin:12px 0 4px;padding:9px 10px;border:1px solid #333740;border-radius:9px;background:#15171c}
 .track-toggle span{color:#d5d7dc}
 .track-toggle input{flex:none}
+
+.post-editor{margin-top:16px;padding:14px;border:1px solid #3b3e47;border-radius:12px;background:#14161b}
+.post-editor .section-head{margin-bottom:10px}
+.post-editor .section-head h2{font-size:14px}
+.post-editor .track-toggle{margin:8px 0;padding:11px 10px}
+.post-editor .brief-btn{margin-top:12px}
+.post-editor .caption-tools{margin-top:12px}
+.post-editor .caption-tools .secondary-btn{min-height:40px}
+#applyPostEditsBtn:disabled{opacity:.55}
