@@ -78,6 +78,7 @@
                 <audio id="voicePlayer" controls preload="metadata"></audio>
                 <a id="voiceDownload" class="download-link" download="sceneforge-voiceover.wav">↓ Download voiceover</a>
               </div>
+              <label class="check-row track-toggle"><input id="voiceoverToggle" type="checkbox" checked /><span>Include voiceover in final video</span></label>
               <div class="or-line"><span>OR</span></div>
               <label class="upload-line" for="voiceUpload"><span class="upload-icon">↑</span><span><strong>Use your own voiceover</strong><small>Upload WAV, MP3, M4A or OGG</small></span><input id="voiceUpload" type="file" accept="audio/*" /></label>
               <p class="fineprint">The voice model downloads once and is cached on this device. First generation needs internet; later generations run locally.</p>
@@ -97,6 +98,7 @@
               <div id="imageList" class="image-list"></div>
               <label class="upload-line music-upload" for="musicUpload"><span class="upload-icon">♫</span><span><strong>Background music</strong><small>Optional audio track, mixed under narration</small></span><input id="musicUpload" type="file" accept="audio/*" /></label>
               <div id="musicName" class="file-note hidden"></div>
+              <label class="check-row track-toggle"><input id="musicToggle" type="checkbox" checked /><span>Include background music in final video</span></label>
             </section>
 
 
@@ -124,7 +126,7 @@
                 <div><label class="field-label" for="aspectSelect">Aspect ratio</label><select id="aspectSelect" class="text-input"><option value="16:9">16:9 · YouTube</option><option value="9:16">9:16 · Shorts / Reels</option><option value="1:1">1:1 · Square</option></select></div>
                 <div><label class="field-label" for="qualitySelect">Resolution</label><select id="qualitySelect" class="text-input"><option value="720">720p · Recommended</option><option value="480">480p · Faster export</option></select></div>
               </div>
-              <label class="check-row"><input id="captionsToggle" type="checkbox" checked /><span>Word-synced karaoke captions (OpenShorts style)</span></label>
+              <label class="check-row track-toggle"><input id="captionsToggle" type="checkbox" checked /><span>Include subtitles / captions in final video</span></label>
               <div class="caption-tools">
                 <label class="caption-language">Caption language
                   <select id="captionLanguage" class="text-input">
