@@ -1,0 +1,11 @@
+{
+  "name": "SceneForge Studio",
+  "short_name": "SceneForge",
+  "description": "Local-first script, voiceover and video studio",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#101114",
+  "theme_color": "#101114",
+  "orientation": "any",
+  "icons": []
+}

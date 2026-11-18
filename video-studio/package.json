@@ -1,0 +1,20 @@
+{
+  "name": "sceneforge-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@pbji/piper-tts-web": "1.0.4",
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "@ffmpeg/util": "0.12.2",
+    "onnxruntime-web": "1.23.0"
+  },
+  "devDependencies": {
+    "vite": "7.1.7"
+  }
+}

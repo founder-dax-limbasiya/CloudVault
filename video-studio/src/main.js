@@ -1,0 +1,481 @@
+import "./style.css";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { toBlobURL } from "@ffmpeg/util";
+
+const $ = (id) => document.getElementById(id);
+const state = {
+  worker: null,
+  voiceBlob: null,
+  voiceBuffer: null,
+  musicBuffer: null,
+  images: [],
+  outputBlob: null,
+  outputUrl: null,
+  ffmpeg: null,
+  ffmpegReady: false
+};
+
+const sampleScript = $("scriptInput").value;
+
+function toast(message, kind = "info") {
+  const el = $("toast");
+  el.textContent = message;
+  el.className = "toast show " + kind;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.className = "toast", 3600);
+}
+
+function setProgress(prefix, value, message) {
+  const percent = Math.max(0, Math.min(100, Math.round(value || 0)));
+  $(prefix + "Progress").style.width = percent + "%";
+  $(prefix + "Percent").textContent = percent + "%";
+  if (message) $(prefix + "Status").textContent = message;
+}
+
+function updateCounts() {
+  const text = $("scriptInput").value;
+  $("charCount").textContent = text.length.toLocaleString() + " characters";
+  const scenes = splitScenes(text);
+  $("sceneCount").textContent = scenes.length + (scenes.length === 1 ? " scene" : " scenes");
+  $("previewEmpty").classList.toggle("hidden", !text.trim());
+  drawPreview();
+}
+function splitScenes(text) {
+  const sentences = text.split(/(?<=[.!?।])\s+|\n+/u).map(s => s.trim()).filter(Boolean);
+  const items = sentences.length ? sentences : (text.trim() ? [text.trim()] : []);
+  const chunks = [];
+  let current = "";
+  for (const sentence of items) {
+    if (current && (current.length + sentence.length > 150 || chunks.length >= 26)) {
+      chunks.push(current);
+      current = sentence;
+    } else {
+      current = current ? current + " " + sentence : sentence;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.slice(0, 28);
+}
+
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const trial = line ? line + " " + word : word;
+    if (ctx.measureText(trial).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else line = trial;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawFrame(time = 0, duration = 1, live = false) {
+  const canvas = $("previewCanvas");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const scenes = splitScenes($("scriptInput").value);
+  const total = Math.max(1, duration);
+  const position = Math.max(0, Math.min(0.9999, time / total));
+  const index = Math.min(Math.max(0, scenes.length - 1), Math.floor(position * Math.max(1, scenes.length)));
+  const text = scenes[index] || "Your story begins here";
+  const palette = [
+    ["#101a2c", "#293d59"], ["#211b2a", "#603b4b"], ["#122a29", "#315d53"],
+    ["#242031", "#4e3f62"], ["#191e2a", "#46566c"], ["#2c211b", "#63452d"]
+  ];
+  const colors = palette[index % palette.length];
+
+  ctx.clearRect(0, 0, W, H);
+  if (state.images.length) {
+    const image = state.images[index % state.images.length].image;
+    const zoom = 1.03 + position * 0.04;
+    const scale = Math.max(W / image.width, H / image.height) * zoom;
+    const sw = W / scale, sh = H / scale;
+    const drift = (position - 0.5) * 0.025;
+    const sx = Math.max(0, Math.min(image.width - sw, (image.width - sw) / 2 + drift * image.width));
+    const sy = Math.max(0, Math.min(image.height - sh, (image.height - sh) / 2 - drift * image.height));
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, W, H);
+  } else {
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, colors[0]);
+    grad.addColorStop(1, colors[1]);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 34; i++) {
+      const x = ((i * 197 + index * 71) % W);
+      const y = ((i * 113 + index * 37) % H);
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255," + (0.025 + (i % 4) * 0.008) + ")";
+      ctx.arc(x, y, (i % 3) * 3 + 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(255,255,255,.10)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(W * 0.78, H * 0.27, Math.min(W, H) * 0.20, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  const shade = ctx.createLinearGradient(0, 0, 0, H);
+  shade.addColorStop(0, "rgba(5,7,12,.28)");
+  shade.addColorStop(.42, "rgba(5,7,12,.16)");
+  shade.addColorStop(1, "rgba(5,7,12,.88)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, W, H);
+
+  const pad = W * .075;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255,255,255,.68)";
+  ctx.font = "600 " + Math.max(13, W * .014) + "px Arial, sans-serif";
+  ctx.fillText("SCENEFORGE  /  CHAPTER " + String(index + 1).padStart(2, "0"), pad, H * .105);
+
+  const hero = text.split(/\s+/).slice(0, 4).join(" ");
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 " + Math.max(28, Math.min(W * .066, H * .085)) + "px Arial, sans-serif";
+  const heroLines = wrapText(ctx, hero, W * .82).slice(0, 3);
+  const startY = H * .46 - (heroLines.length - 1) * H * .045;
+  heroLines.forEach((line, i) => ctx.fillText(line, W / 2, startY + i * H * .09));
+
+  if ($("captionsToggle").checked) {
+    const captionLines = wrapText(ctx, text, W * .80).slice(0, 3);
+    const lineH = Math.max(24, H * .039);
+    const boxH = captionLines.length * lineH + H * .055;
+    const boxY = H * .78 - boxH / 2;
+    ctx.fillStyle = "rgba(8,10,15,.72)";
+    const boxW = W * .88;
+    ctx.beginPath();
+    ctx.roundRect((W - boxW) / 2, boxY, boxW, boxH, 16);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "600 " + Math.max(16, W * .026) + "px Arial, sans-serif";
+    captionLines.forEach((line, i) => ctx.fillText(line, W / 2, boxY + H * .032 + (i + 1) * lineH));
+  }
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255,255,255,.65)";
+  ctx.font = "500 " + Math.max(12, W * .012) + "px Arial, sans-serif";
+  const title = $("videoTitle").value.trim().slice(0, 52);
+  ctx.fillText(title || "Untitled story", pad, H * .94);
+
+  ctx.fillStyle = "rgba(255,255,255,.24)";
+  ctx.fillRect(pad, H * .965, W - pad * 2, Math.max(3, H * .004));
+  ctx.fillStyle = "#e5bd87";
+  ctx.fillRect(pad, H * .965, (W - pad * 2) * position, Math.max(3, H * .004));
+}
+function drawPreview() { drawFrame(0, 1, true); }
+
+async function decodeAudio(blob) {
+  const context = new AudioContext();
+  try {
+    const buffer = await context.decodeAudioData(await blob.arrayBuffer());
+    return buffer;
+  } finally {
+    await context.close();
+  }
+}
+
+function updateRenderAvailability() {
+  const ready = Boolean(state.voiceBuffer);
+  $("renderBtn").disabled = !ready;
+  $("renderHint").textContent = ready
+    ? "Ready to render. Your media stays in this browser."
+    : "Generate or upload a voiceover to enable video export.";
+}
+
+function setWorker() {
+  if (state.worker) return state.worker;
+  const worker = new Worker(new URL("./tts.worker.js", import.meta.url), { type: "module" });
+  worker.onmessage = async ({ data }) => {
+    if (data.type === "status") {
+      $("voiceStatus").textContent = data.message;
+    } else if (data.type === "progress") {
+      const pct = data.total ? (data.loaded / data.total) * 100 : 0;
+      setProgress("voice", pct, "Downloading Hindi voice model…");
+    } else if (data.type === "done") {
+      try {
+        state.voiceBlob = data.audio;
+        state.voiceBuffer = await decodeAudio(data.audio);
+        const url = URL.createObjectURL(data.audio);
+        $("voicePlayer").src = url;
+        $("voiceDownload").href = url;
+        $("voiceResult").classList.remove("hidden");
+        $("voiceProgressWrap").classList.add("hidden");
+        $("voiceStatus").textContent = "Voiceover ready";
+        updateRenderAvailability();
+        toast("Hindi voiceover generated on this device.", "success");
+      } catch (error) {
+        toast("Audio could not be decoded: " + error.message, "error");
+      } finally {
+        $("generateVoice").disabled = false;
+        $("generateVoice").innerHTML = '<span class="btn-icon">◖</span> Generate voiceover';
+      }
+    } else if (data.type === "error") {
+      $("voiceProgressWrap").classList.add("hidden");
+      $("generateVoice").disabled = false;
+      $("generateVoice").innerHTML = '<span class="btn-icon">◖</span> Generate voiceover';
+      toast(data.message || "Voice generation failed.", "error");
+    }
+  };
+  worker.onerror = (event) => {
+    $("voiceProgressWrap").classList.add("hidden");
+    $("generateVoice").disabled = false;
+    $("generateVoice").innerHTML = '<span class="btn-icon">◖</span> Generate voiceover';
+    toast(event.message || "Voice worker failed to start.", "error");
+  };
+  state.worker = worker;
+  return worker;
+}
+
+$("generateVoice").addEventListener("click", () => {
+  const text = $("scriptInput").value.trim();
+  if (!text) return toast("Paste your script first.", "error");
+  if (text.length > 7000) return toast("For phone memory, keep the first pass under 7,000 characters.", "error");
+  $("generateVoice").disabled = true;
+  $("generateVoice").innerHTML = '<span class="spinner"></span> Working…';
+  $("voiceProgressWrap").classList.remove("hidden");
+  $("voiceResult").classList.add("hidden");
+  setProgress("voice", 0, "Starting the local Hindi engine…");
+  setWorker().postMessage({ text, voiceId: "hi_IN-rohan-medium" });
+});
+
+$("voiceUpload").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    state.voiceBlob = file;
+    state.voiceBuffer = await decodeAudio(file);
+    const url = URL.createObjectURL(file);
+    $("voicePlayer").src = url;
+    $("voiceDownload").href = url;
+    $("voiceDownload").download = file.name;
+    $("voiceResult").classList.remove("hidden");
+    updateRenderAvailability();
+    toast("Your voiceover is ready.", "success");
+  } catch (error) {
+    toast("This audio format could not be opened by the browser.", "error");
+  }
+});
+
+$("musicUpload").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    state.musicBuffer = await decodeAudio(file);
+    $("musicName").textContent = "♫  " + file.name;
+    $("musicName").classList.remove("hidden");
+    toast("Background soundtrack added.", "success");
+  } catch {
+    toast("This music file could not be opened.", "error");
+  }
+});
+
+$("imageUpload").addEventListener("change", async (event) => {
+  const files = Array.from(event.target.files || []).slice(0, 12);
+  state.images = [];
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) continue;
+    const image = new Image();
+    image.src = URL.createObjectURL(file);
+    await image.decode().catch(() => null);
+    if (image.naturalWidth) state.images.push({ name: file.name, image, url: image.src });
+  }
+  const list = $("imageList");
+  list.innerHTML = "";
+  state.images.forEach((item) => {
+    const img = document.createElement("img");
+    img.src = item.url;
+    img.alt = item.name;
+    img.title = item.name;
+    list.appendChild(img);
+  });
+  $("previewEmpty").classList.toggle("hidden", !$("scriptInput").value.trim());
+  drawPreview();
+  toast(state.images.length + " visual(s) added.", "success");
+});
+
+$("scriptInput").addEventListener("input", updateCounts);
+$("videoTitle").addEventListener("input", drawPreview);
+$("captionsToggle").addEventListener("change", drawPreview);
+
+$("aspectSelect").addEventListener("change", () => {
+  const ratio = $("aspectSelect").value;
+  const frame = $("canvasFrame");
+  frame.className = "canvas-frame " + (ratio === "9:16" ? "ratio-9-16" : ratio === "1:1" ? "ratio-1-1" : "ratio-16-9");
+  $("previewRatio").textContent = ratio;
+  const q = Number($("qualitySelect").value);
+  const sizes = ratio === "9:16" ? [720, 1280] : ratio === "1:1" ? [720, 720] : [1280, 720];
+  const scale = q === 480 ? .667 : 1;
+  $("previewCanvas").width = Math.round(sizes[0] * scale);
+  $("previewCanvas").height = Math.round(sizes[1] * scale);
+  drawPreview();
+});
+$("qualitySelect").addEventListener("change", () => $("aspectSelect").dispatchEvent(new Event("change")));
+
+function recorderType() {
+  const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  return candidates.find(type => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+$("renderBtn").addEventListener("click", async () => {
+  if (!state.voiceBuffer) return;
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+    return toast("This browser does not support local video recording. Try the latest Chrome.", "error");
+  }
+  const duration = state.voiceBuffer.duration;
+  if (duration > 600) return toast("For reliable phone rendering, export videos under 10 minutes.", "error");
+  const mimeType = recorderType();
+  if (!mimeType) return toast("WebM export is not supported in this browser.", "error");
+
+  $("renderBtn").disabled = true;
+  $("renderProgressWrap").classList.remove("hidden");
+  $("outputPanel").classList.add("hidden");
+  setProgress("render", 0, "Preparing the scene timeline…");
+
+  let audioContext;
+  let animationId;
+  try {
+    const canvas = $("previewCanvas");
+    const stream = canvas.captureStream(24);
+    audioContext = new AudioContext();
+    await audioContext.resume();
+    const destination = audioContext.createMediaStreamDestination();
+    const voiceSource = audioContext.createBufferSource();
+    const voiceGain = audioContext.createGain();
+    voiceGain.gain.value = 1;
+    voiceSource.buffer = state.voiceBuffer;
+    voiceSource.connect(voiceGain).connect(destination);
+
+    let musicSource;
+    if (state.musicBuffer) {
+      musicSource = audioContext.createBufferSource();
+      const musicGain = audioContext.createGain();
+      musicGain.gain.value = .16;
+      musicSource.buffer = state.musicBuffer;
+      musicSource.loop = true;
+      musicSource.connect(musicGain).connect(destination);
+    }
+    const combined = new MediaStream([
+      ...stream.getVideoTracks(),
+      ...destination.stream.getAudioTracks()
+    ]);
+    const options = { mimeType, videoBitsPerSecond: Number($("qualitySelect").value) === 480 ? 1600000 : 3500000, audioBitsPerSecond: 128000 };
+    const recorder = new MediaRecorder(combined, options);
+    const chunks = [];
+    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+    const startAt = audioContext.currentTime + .08;
+    const started = performance.now();
+    const renderTick = () => {
+      const t = Math.max(0, audioContext.currentTime - startAt);
+      drawFrame(t, duration);
+      setProgress("render", (t / duration) * 100, "Rendering your video…");
+      if (t < duration) animationId = requestAnimationFrame(renderTick);
+    };
+    recorder.onstop = async () => {
+      cancelAnimationFrame(animationId);
+      stream.getTracks().forEach(track => track.stop());
+      combined.getTracks().forEach(track => track.stop());
+      await audioContext.close().catch(() => {});
+      const blob = new Blob(chunks, { type: mimeType });
+      state.outputBlob = blob;
+      if (state.outputUrl) URL.revokeObjectURL(state.outputUrl);
+      state.outputUrl = URL.createObjectURL(blob);
+      $("videoOutput").src = state.outputUrl;
+      $("videoDownload").href = state.outputUrl;
+      $("videoDownload").download = safeFilename($("videoTitle").value) + ".webm";
+      $("outputPanel").classList.remove("hidden");
+      $("renderProgressWrap").classList.add("hidden");
+      $("renderBtn").disabled = false;
+      $("renderStatus").textContent = "Video ready";
+      setProgress("render", 100, "Video ready");
+      toast("Your video is ready to download.", "success");
+      drawPreview();
+    };
+    recorder.onerror = () => toast("The browser stopped the video recording unexpectedly.", "error");
+    recorder.start(1000);
+    voiceSource.start(startAt);
+    musicSource?.start(startAt);
+    renderTick();
+    setTimeout(() => { if (recorder.state !== "inactive") recorder.stop(); }, duration * 1000 + 350);
+  } catch (error) {
+    cancelAnimationFrame(animationId);
+    if (audioContext && audioContext.state !== "closed") await audioContext.close().catch(() => {});
+    $("renderBtn").disabled = false;
+    $("renderProgressWrap").classList.add("hidden");
+    toast("Video export failed: " + (error?.message || "unknown error"), "error");
+  }
+});
+
+function safeFilename(name) {
+  return (name || "sceneforge-video").replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 50) || "sceneforge-video";
+}
+
+$("mp4Btn").addEventListener("click", async () => {
+  if (!state.outputBlob) return;
+  const button = $("mp4Btn");
+  button.disabled = true;
+  button.textContent = "Loading converter…";
+  $("mp4Hint").textContent = "Downloading the FFmpeg engine and converting locally. This can take a while on phones.";
+  try {
+    if (!state.ffmpeg) {
+      state.ffmpeg = new FFmpeg();
+      state.ffmpeg.on("progress", ({ progress }) => {
+        $("mp4Hint").textContent = "MP4 conversion: " + Math.round(progress * 100) + "%";
+      });
+    }
+    if (!state.ffmpegReady) {
+      const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+      await state.ffmpeg.load({
+        coreURL: await toBlobURL(base + "/ffmpeg-core.js", "text/javascript"),
+        wasmURL: await toBlobURL(base + "/ffmpeg-core.wasm", "application/wasm")
+      });
+      state.ffmpegReady = true;
+    }
+    button.textContent = "Converting…";
+    await state.ffmpeg.writeFile("scene.webm", new Uint8Array(await state.outputBlob.arrayBuffer()));
+    await state.ffmpeg.exec([
+      "-i", "scene.webm", "-c:v", "libx264", "-preset", "ultrafast",
+      "-crf", "24", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "scene.mp4"
+    ]);
+    const result = await state.ffmpeg.readFile("scene.mp4");
+    const mp4 = new Blob([result.buffer], { type: "video/mp4" });
+    const url = URL.createObjectURL(mp4);
+    $("videoOutput").src = url;
+    $("videoDownload").href = url;
+    $("videoDownload").download = safeFilename($("videoTitle").value) + ".mp4";
+    $("videoDownload").textContent = "↓ Download MP4";
+    $("mp4Hint").textContent = "MP4 ready. Conversion happened locally in this browser.";
+    toast("MP4 conversion complete.", "success");
+  } catch (error) {
+    $("mp4Hint").textContent = "MP4 conversion was not available on this device. Your WebM video is still ready.";
+    toast("MP4 conversion failed. Download the WebM version instead.", "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Convert to MP4";
+  }
+});
+
+$("clearScript").addEventListener("click", () => {
+  $("scriptInput").value = "";
+  updateCounts();
+});
+$("resetBtn").addEventListener("click", () => {
+  $("scriptInput").value = sampleScript;
+  $("videoTitle").value = "आख़िरी ट्रेन — प्लेटफ़ॉर्म नंबर 0";
+  state.voiceBlob = null;
+  state.voiceBuffer = null;
+  state.musicBuffer = null;
+  state.images = [];
+  $("voiceResult").classList.add("hidden");
+  $("imageList").innerHTML = "";
+  $("musicName").classList.add("hidden");
+  $("outputPanel").classList.add("hidden");
+  updateRenderAvailability();
+  updateCounts();
+  toast("Sample project restored.");
+});
+
+updateCounts();
+updateRenderAvailability();

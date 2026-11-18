@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101114" />
+    <meta name="description" content="A local-first script, voiceover and video studio. Create cinematic story videos on your device." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>SceneForge Studio — Script to Video</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="SceneForge home">
+          <span class="brand-mark">SF</span>
+          <span><strong>SceneForge</strong><small>CREATOR STUDIO</small></span>
+        </a>
+        <div class="top-actions">
+          <span class="local-pill"><i></i> LOCAL-FIRST</span>
+          <button id="resetBtn" class="icon-btn" type="button" title="Reset project" aria-label="Reset project">↺</button>
+        </div>
+      </header>
+
+      <main class="shell">
+        <section class="intro">
+          <div class="eyebrow">SCRIPT → VOICE → VIDEO</div>
+          <h1>Your story.<br /><span>Made into a film.</span></h1>
+          <p>Write a script, generate a Hindi voiceover, add your visuals and export a video — right in your browser.</p>
+        </section>
+
+        <section class="workspace">
+          <div class="editor-column">
+            <section class="panel script-panel">
+              <div class="section-head">
+                <div><span class="step">01</span><h2>Story & script</h2></div>
+                <span id="charCount" class="muted">0 characters</span>
+              </div>
+              <label class="field-label" for="videoTitle">Video title</label>
+              <input id="videoTitle" class="text-input" maxlength="90" value="आख़िरी ट्रेन — प्लेटफ़ॉर्म नंबर 0" placeholder="Give your story a title" />
+              <label class="field-label" for="scriptInput">Narration script</label>
+              <textarea id="scriptInput" class="script-input" maxlength="12000" spellcheck="false" placeholder="Paste your Hindi or English script here...">रात के बारह बजकर सत्रह मिनट पर भैरवपुर स्टेशन की घड़ी अचानक रुक गई। प्लेटफ़ॉर्म पर सिर्फ़ कबीर था, और दूर से आती ट्रेन की एक धीमी सीटी।
+
+स्टेशन मास्टर देवेंद्र ने उसे पहले ही चेतावनी दी थी। अगर आधी रात के बाद प्लेटफ़ॉर्म शून्य की घोषणा हो, तो बाहर मत जाना।
+
+लेकिन उस रात लाउडस्पीकर पर एक ऐसी आवाज़ गूँजी, जिसने कबीर के कदम रोक दिए। अगली ट्रेन प्लेटफ़ॉर्म नंबर शून्य पर आ रही थी।
+
+कबीर ने स्टेशन के नक्शे में देखा। वहाँ कोई प्लेटफ़ॉर्म नंबर शून्य था ही नहीं।
+
+ट्रेन रुकी। दरवाज़ा खुला। और सामने देवेंद्र खड़े थे — हाथ में एक पुरानी घड़ी, आँखों में इंतज़ार।
+
+वह अठारह साल से अपनी बेटी नैना का इंतज़ार कर रहे थे। उसी हादसे में, जिस रात स्टेशन पर आख़िरी ट्रेन कभी नहीं पहुँची थी।
+
+कबीर को धीरे-धीरे समझ आया कि उस रात सिर्फ़ ट्रेन नहीं लौटी थी। देवेंद्र भी उसी रात इस दुनिया से जा चुके थे।
+
+घड़ी में फिर से बारह बजकर सत्रह मिनट हुए। प्लेटफ़ॉर्म पर एक छोटी लड़की उतरी। देवेंद्र मुस्कुराए। और पहली बार, स्टेशन की सीटी के बाद सन्नाटा नहीं — एक पिता की हँसी सुनाई दी।</textarea>
+              <div class="script-footer">
+                <span class="hint">Tip: Use short paragraphs for cleaner scene changes.</span>
+                <button id="clearScript" class="text-btn" type="button">Clear script</button>
+              </div>
+            </section>
+
+            <section class="panel voice-panel">
+              <div class="section-head">
+                <div><span class="step">02</span><h2>Voiceover</h2></div>
+                <span class="engine-tag">PIPER · ON-DEVICE</span>
+              </div>
+              <div class="voice-row">
+                <div class="voice-avatar">र</div>
+                <div class="voice-meta"><strong>Rohan · Hindi male</strong><span>Neural voice · 22.05 kHz</span></div>
+                <span class="voice-size">~63 MB</span>
+              </div>
+              <button id="generateVoice" class="primary-btn full-btn" type="button"><span class="btn-icon">◖</span> Generate voiceover</button>
+              <div id="voiceProgressWrap" class="progress-wrap hidden">
+                <div class="progress-label"><span id="voiceStatus">Preparing voice engine…</span><strong id="voicePercent">0%</strong></div>
+                <div class="progress-track"><div id="voiceProgress" class="progress-fill"></div></div>
+              </div>
+              <div id="voiceResult" class="voice-result hidden">
+                <audio id="voicePlayer" controls preload="metadata"></audio>
+                <a id="voiceDownload" class="download-link" download="sceneforge-voiceover.wav">↓ Download voiceover</a>
+              </div>
+              <div class="or-line"><span>OR</span></div>
+              <label class="upload-line" for="voiceUpload"><span class="upload-icon">↑</span><span><strong>Use your own voiceover</strong><small>Upload WAV, MP3, M4A or OGG</small></span><input id="voiceUpload" type="file" accept="audio/*" /></label>
+              <p class="fineprint">The voice model downloads once and is cached on this device. First generation needs internet; later generations run locally.</p>
+            </section>
+
+            <section class="panel media-panel">
+              <div class="section-head">
+                <div><span class="step">03</span><h2>Visuals & soundtrack</h2></div>
+                <span class="muted">OPTIONAL</span>
+              </div>
+              <label class="dropzone" for="imageUpload">
+                <span class="drop-icon">▧</span>
+                <strong>Add story images</strong>
+                <small>Choose up to 12 photos · JPG, PNG, WebP</small>
+                <input id="imageUpload" type="file" accept="image/*" multiple />
+              </label>
+              <div id="imageList" class="image-list"></div>
+              <label class="upload-line music-upload" for="musicUpload"><span class="upload-icon">♫</span><span><strong>Background music</strong><small>Optional audio track, mixed under narration</small></span><input id="musicUpload" type="file" accept="audio/*" /></label>
+              <div id="musicName" class="file-note hidden"></div>
+            </section>
+
+            <section class="panel export-panel">
+              <div class="section-head">
+                <div><span class="step">04</span><h2>Export settings</h2></div>
+              </div>
+              <div class="setting-grid">
+                <div><label class="field-label" for="aspectSelect">Aspect ratio</label><select id="aspectSelect" class="text-input"><option value="16:9">16:9 · YouTube</option><option value="9:16">9:16 · Shorts / Reels</option><option value="1:1">1:1 · Square</option></select></div>
+                <div><label class="field-label" for="qualitySelect">Resolution</label><select id="qualitySelect" class="text-input"><option value="720">720p · Recommended</option><option value="480">480p · Faster export</option></select></div>
+              </div>
+              <label class="check-row"><input id="captionsToggle" type="checkbox" checked /><span>Burn animated captions into video</span></label>
+              <button id="renderBtn" class="primary-btn full-btn render-btn" type="button" disabled><span class="btn-icon">▶</span> Create video</button>
+              <p id="renderHint" class="fineprint">Generate or upload a voiceover to enable video export.</p>
+              <div id="renderProgressWrap" class="progress-wrap hidden">
+                <div class="progress-label"><span id="renderStatus">Rendering scenes…</span><strong id="renderPercent">0%</strong></div>
+                <div class="progress-track"><div id="renderProgress" class="progress-fill"></div></div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="preview-column">
+            <section class="panel preview-panel">
+              <div class="section-head">
+                <div><span class="step">LIVE</span><h2>Preview</h2></div>
+                <span id="previewRatio" class="muted">16:9</span>
+              </div>
+              <div id="canvasFrame" class="canvas-frame ratio-16-9">
+                <canvas id="previewCanvas" width="1280" height="720"></canvas>
+                <div id="previewEmpty" class="preview-empty"><span>✦</span><strong>Your story takes shape here</strong><small>Scenes are built automatically from your script.</small></div>
+              </div>
+              <div class="preview-meta"><span><i class="status-dot"></i> LIVE CANVAS</span><span id="sceneCount">0 scenes</span></div>
+            </section>
+            <section id="outputPanel" class="panel output-panel hidden">
+              <div class="section-head"><div><span class="step">DONE</span><h2>Your video</h2></div><span class="success-tag">READY</span></div>
+              <video id="videoOutput" controls playsinline></video>
+              <div class="output-actions"><a id="videoDownload" class="primary-btn download-btn" download="sceneforge-video.webm">↓ Download video</a><button id="mp4Btn" class="secondary-btn" type="button">Convert to MP4</button></div>
+              <p id="mp4Hint" class="fineprint">WebM works on YouTube. MP4 conversion is optional and may be slow on phones.</p>
+            </section>
+            <section class="panel privacy-card">
+              <div class="privacy-icon">⌂</div>
+              <div><strong>Your files stay on your device</strong><p>Voice generation, mixing and video rendering happen locally in this browser. Nothing is uploaded to SceneForge.</p></div>
+            </section>
+          </aside>
+        </section>
+        <footer class="footer"><span>SCENEFORGE STUDIO · OPEN-SOURCE ENGINES</span><span>Built for creators, not render farms.</span></footer>
+      </main>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
