@@ -5,12 +5,14 @@ on:
     branches: [main, 'feature/**']
     paths:
       - 'source/native-bundle/**'
+      - 'native-patches/**'
       - 'build.sh'
       - '.github/workflows/android-build.yml'
   pull_request:
     branches: [main]
     paths:
       - 'source/native-bundle/**'
+      - 'native-patches/**'
       - 'build.sh'
       - '.github/workflows/android-build.yml'
   workflow_dispatch:
@@ -45,6 +47,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Expand app source bundle
         run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
+      - name: Apply Android manifest merger fix
+        run: cp native-patches/android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
