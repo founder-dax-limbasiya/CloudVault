@@ -5,6 +5,7 @@ on:
     branches: [main, 'feature/**']
     paths:
       - 'source/native-bundle/**'
+      - 'supabase/functions/**'
       - 'native-patches/**'
       - 'build.sh'
       - '.github/workflows/android-build.yml'
@@ -27,43 +28,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Expand app source bundle
         run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
-      - name: Audit Play Store privacy and account deletion support
-        run: |
-          echo '--- Privacy policy and account deletion references ---'
-          grep -RniE 'delete.{0,30}account|account.{0,30}delete|privacy policy|delete-account|data deletion' web server 2>/dev/null | head -100 || true
-          echo '--- Server route and DELETE handlers ---'
-          grep -nE 'pathname|request\.method|DELETE|/auth|/account' server/index.js | head -120 || true
-          echo '--- Candidate policy or deletion pages ---'
-          find web -maxdepth 3 -type f | grep -Ei 'privacy|delete|account' | head -80 || true
-      - name: Inspect account and policy insertion points
-        run: |
-          echo '--- Main account settings ---'
-          grep -n -A 32 -B 5 'function renderSettingsPage' web/src/main.js
-          echo '--- Main app action handling ---'
-          grep -n -A 55 -B 8 'account-sign-out' web/src/main.js
-          echo '--- Account sign-out helpers ---'
-          grep -n -A 35 -B 5 'async function signOutCloudVault' web/src/main.js
-          echo '--- Server final auth routes ---'
-          sed -n '90,255p' server/index.js
-          echo '--- Schema user foreign keys ---'
-          grep -n -A 12 -B 2 'CREATE TABLE IF NOT EXISTS cv_users\|REFERENCES cv_users' server/schema.sql
-          echo '--- Web root and deployment route config ---'
-          find web -maxdepth 2 -type f | head -40
-          cat vercel.json
-      - name: Locate deployed Supabase API and account UI handlers
-        run: |
-          echo '--- Top-level extracted source ---'
-          find . -maxdepth 4 -type f | sort | head -180
-          echo '--- Supabase function folders ---'
-          find . -path '*functions*' -type f | head -100
-          echo '--- Account deletion and route symbols in all app source ---'
-          grep -RniE 'account-sign-out|signOutCloudVault|serve\(|Deno\.serve|cloudvault-api|auth/register|cv_users' . --exclude-dir=.git --exclude='*.b64' | head -180 || true
-          echo '--- Main action router context ---'
-          grep -n -A 70 -B 5 'account-sign-out' web/src/main.js
-          echo '--- Sign out helper context ---'
-          grep -n -A 22 -B 4 'async function signOutCloudVault' web/src/main.js
       - name: Add prominent Telegram API settings link
         run: node native-patches/add-telegram-api-link.mjs web/src/main.js
+      - name: Add privacy policy and account deletion pages
+        run: node native-patches/add-privacy-and-account-deletion.mjs web server/index.js
+      - name: Add privacy policy and account deletion pages
+        run: node native-patches/add-privacy-and-account-deletion.mjs web server/index.js
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
