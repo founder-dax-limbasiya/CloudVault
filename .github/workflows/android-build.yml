@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Expand app source bundle
         run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
+      - name: Add prominent Telegram API settings link
+        run: node native-patches/add-telegram-api-link.mjs web/src/main.js
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -49,6 +51,8 @@ jobs:
         run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
       - name: Apply Android manifest merger fix
         run: cp native-patches/android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+      - name: Add prominent Telegram API settings link
+        run: node native-patches/add-telegram-api-link.mjs web/src/main.js
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
