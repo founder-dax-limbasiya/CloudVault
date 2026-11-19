@@ -70,6 +70,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.14'
+      - name: Inspect TDLib compile context
+        run: |
+          echo '--- TelegramManager.kt lines 350-375 ---'
+          nl -ba android/app/src/main/java/com/cloudvault/app/TelegramManager.kt | sed -n '350,375p'
+          echo '--- TelegramManager.kt lines 495-515 ---'
+          nl -ba android/app/src/main/java/com/cloudvault/app/TelegramManager.kt | sed -n '495,515p'
+          echo '--- Android dependency declarations ---'
+          grep -RniE 'tdlib|telegram' android --include='*.gradle*' --include='*.toml' || true
       - name: Build debug APK
         run: gradle --no-daemon -p android :app:assembleDebug
       - name: Upload APK artifact
