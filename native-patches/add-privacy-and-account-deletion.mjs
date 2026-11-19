@@ -49,6 +49,14 @@ if (serverFile && fs.existsSync(serverFile)) {
   }
 }
 
+const storageFile = path.join(webDir, 'src', 'storage.js');
+if (!fs.existsSync(storageFile)) throw new Error('web/src/storage.js was not found.');
+let storage = fs.readFileSync(storageFile, 'utf8');
+if (!storage.includes('export const clearLocalAccountData')) {
+  if (!storage.includes("export const clearEncryptedVault = () => requestStore('vault', 'readwrite', (store) => store.delete('primary'));")) throw new Error('Could not find the local encrypted vault clear function.');
+  storage = storage.replace("export const clearEncryptedVault = () => requestStore('vault', 'readwrite', (store) => store.delete('primary'));", "export const clearEncryptedVault = () => requestStore('vault', 'readwrite', (store) => store.delete('primary'));\nexport const clearLocalAccountData = async () => {\n  const db = await openDb();\n  try {\n    await new Promise((resolve, reject) => {\n      const tx = db.transaction(['vault', 'folders', 'assignments'], 'readwrite');\n      tx.objectStore('vault').clear();\n      tx.objectStore('folders').clear();\n      tx.objectStore('assignments').clear();\n      tx.oncomplete = () => resolve();\n      tx.onerror = () => reject(tx.error || new Error('Could not clear local CloudVault data.'));\n      tx.onabort = () => reject(tx.error || new Error('Local CloudVault data deletion was aborted.'));\n    });\n  } finally { db.close(); }\n}");
+  fs.writeFileSync(storageFile, storage);
+}
 const policy = [
   "<!doctype html>",
   '<html lang="en">',
@@ -152,7 +160,7 @@ const deletion = [
   "  <p class='muted'><a href='/privacy-policy.html'>Privacy policy</a> · <a href='/'>Return to CloudVault</a></p>",
   "</main>",
   "<script type='module'>",
-  "  import { clearEncryptedVault } from '/src/storage.js';",
+  "  import { clearLocalAccountData } from '/src/storage.js';",
   "  const statusBox = document.getElementById('status');",
   "  const loginForm = document.getElementById('login-form');",
   "  const deletePanel = document.getElementById('delete-panel');",
@@ -185,7 +193,7 @@ const deletion = [
   "    setStatus('Deleting your CloudVault account…');",
   "    try {",
   "      await api('/auth/account', { method: 'DELETE', body: JSON.stringify({ password }) });",
-  "      try { await clearEncryptedVault(); } catch { /* the account has already been deleted remotely */ }",
+  "      try { await clearLocalAccountData(); } catch { /* the account has already been deleted remotely */ }",
   "      deletePanel.classList.add('hidden');",
   "      setStatus('Your CloudVault account and associated CloudVault database records have been deleted. Your Telegram Saved Messages files were not changed. To remove those files, delete them in Telegram. You can now close this page.');",
   "    } catch (error) { setStatus(error.message); }",
