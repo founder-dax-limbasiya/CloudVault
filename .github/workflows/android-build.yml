@@ -35,6 +35,21 @@ jobs:
           grep -nE 'pathname|request\.method|DELETE|/auth|/account' server/index.js | head -120 || true
           echo '--- Candidate policy or deletion pages ---'
           find web -maxdepth 3 -type f | grep -Ei 'privacy|delete|account' | head -80 || true
+      - name: Inspect account and policy insertion points
+        run: |
+          echo '--- Main account settings ---'
+          grep -n -A 32 -B 5 'function renderSettingsPage' web/src/main.js
+          echo '--- Main app action handling ---'
+          grep -n -A 55 -B 8 'account-sign-out' web/src/main.js
+          echo '--- Account sign-out helpers ---'
+          grep -n -A 35 -B 5 'async function signOutCloudVault' web/src/main.js
+          echo '--- Server final auth routes ---'
+          sed -n '90,255p' server/index.js
+          echo '--- Schema user foreign keys ---'
+          grep -n -A 12 -B 2 'CREATE TABLE IF NOT EXISTS cv_users\|REFERENCES cv_users' server/schema.sql
+          echo '--- Web root and deployment route config ---'
+          find web -maxdepth 2 -type f | head -40
+          cat vercel.json
       - name: Add prominent Telegram API settings link
         run: node native-patches/add-telegram-api-link.mjs web/src/main.js
       - uses: actions/setup-node@v4
