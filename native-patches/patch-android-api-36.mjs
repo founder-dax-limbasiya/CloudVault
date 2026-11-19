@@ -18,7 +18,7 @@ function upgrade(field) {
   const already = new RegExp(`^\\s*${field}\\s*=\\s*36\\s*$`, "m");
   const count = (source.match(new RegExp(`^\\s*${field}\\s*=\\s*35\\s*$`, "gm")) || []).length;
   if (count === 1) {
-    source = source.replace(current, "$136$2");
+    source = source.replace(current, (_match, prefix, suffix) => `${prefix}36${suffix}`);
     return;
   }
   if (count === 0 && already.test(source)) return;
