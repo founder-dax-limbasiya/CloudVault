@@ -49,12 +49,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Expand app source bundle
         run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
-      - name: Inspect Android SDK configuration
-        run: |
-          echo '--- app/build.gradle.kts ---'
-          sed -n '1,140p' android/app/build.gradle.kts
-          echo '--- settings files with Android SDK pins ---'
-          grep -RniE 'compileSdk|targetSdk|buildToolsVersion' android --include='*.gradle*' --include='*.properties' || true
+      - name: Upgrade Android SDK targets to API 36
+        run: node native-patches/patch-android-api-36.mjs android/app/build.gradle.kts
       - name: Apply Android manifest merger fix
         run: cp native-patches/android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
       - name: Add prominent Telegram API settings link
@@ -68,10 +64,10 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - name: Install Android SDK 35
+      - name: Install Android SDK 36
         run: |
           yes | sdkmanager --licenses >/dev/null
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
