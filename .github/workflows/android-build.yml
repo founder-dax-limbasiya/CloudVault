@@ -78,6 +78,8 @@ jobs:
           nl -ba android/app/src/main/java/com/cloudvault/app/TelegramManager.kt | sed -n '495,515p'
           echo '--- Android dependency declarations ---'
           grep -RniE 'tdlib|telegram' android --include='*.gradle*' --include='*.toml' || true
+          echo '--- Relevant TelegramManager declarations ---'
+          grep -n -B 5 -A 10 -E 'uploadsByPath|sendTdlibParameters|databaseKeyString|data class .*Upload|class .*Upload' android/app/src/main/java/com/cloudvault/app/TelegramManager.kt
       - name: Build debug APK
         run: gradle --no-daemon -p android :app:assembleDebug
       - name: Upload APK artifact
