@@ -1,0 +1,10 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+public
+video-studio
+source/chunk*.b64
+*.log
+.DS_Store
