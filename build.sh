@@ -13,4 +13,5 @@ mkdir -p "$TMP_DIR" "$ROOT/public"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 cat "$BUNDLE_DIR"/part*.b64 | base64 -d | tar -xJ -C "$TMP_DIR"
+node "$ROOT/native-patches/add-telegram-api-link.mjs" "$TMP_DIR/web/src/main.js"
 cp -R "$TMP_DIR/web/." "$ROOT/public/"
