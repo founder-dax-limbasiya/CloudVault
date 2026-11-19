@@ -27,6 +27,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Expand app source bundle
         run: cat source/native-bundle/part*.b64 | base64 -d | tar -xJ -C .
+      - name: Audit Play Store privacy and account deletion support
+        run: |
+          echo '--- Privacy policy and account deletion references ---'
+          grep -RniE 'delete.{0,30}account|account.{0,30}delete|privacy policy|delete-account|data deletion' web server 2>/dev/null | head -100 || true
+          echo '--- Server route and DELETE handlers ---'
+          grep -nE 'pathname|request\.method|DELETE|/auth|/account' server/index.js | head -120 || true
+          echo '--- Candidate policy or deletion pages ---'
+          find web -maxdepth 3 -type f | grep -Ei 'privacy|delete|account' | head -80 || true
       - name: Add prominent Telegram API settings link
         run: node native-patches/add-telegram-api-link.mjs web/src/main.js
       - uses: actions/setup-node@v4
