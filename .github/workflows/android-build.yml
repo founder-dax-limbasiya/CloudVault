@@ -74,6 +74,20 @@ jobs:
         run: node native-patches/patch-tdlib-compat.mjs android/app/src/main/java/com/cloudvault/app/TelegramManager.kt
       - name: Build debug APK
         run: gradle --no-daemon -p android :app:assembleDebug
+      - name: Inspect Android manifest metadata
+        run: |
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging android/app/build/outputs/apk/debug/app-debug.apk | head -n 8
+          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Build Play Store App Bundle
+        run: gradle --no-daemon -p android :app:bundleRelease
+      - name: Inspect App Bundle output
+        run: ls -lh android/app/build/outputs/bundle/release/app-release.aab
+      - name: Upload unsigned release App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudvault-android-release-aab-unsigned
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
