@@ -32,6 +32,14 @@ jobs:
         run: node native-patches/add-telegram-api-link.mjs web/src/main.js
       - name: Add privacy policy and account deletion pages
         run: node native-patches/add-privacy-and-account-deletion.mjs web server/index.js
+      - name: Verify privacy and account deletion assets
+        run: |
+          node --check native-patches/add-privacy-and-account-deletion.mjs
+          node --check web/src/storage.js
+          test -s web/privacy-policy.html
+          test -s web/delete-account.html
+          grep -q 'clearLocalAccountData' web/src/storage.js
+          grep -q '/auth/account' web/delete-account.html
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -42,6 +50,20 @@ jobs:
           node --check server/index.js
       - name: Run tests
         run: npm test
+      - name: Verify live account deletion requires authentication
+        run: |
+          node --input-type=module <<'NODE'
+          const response = await fetch('https://cloudvault-pi.vercel.app/api/auth/account', {
+            method: 'DELETE',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          const body = await response.text();
+          if (response.status !== 401) {
+            throw new Error(`Expected an unauthenticated request to return 401; got ${response.status}: ${body}`);
+          }
+          console.log('Live account deletion endpoint correctly rejects requests without a CloudVault session.');
+          NODE
       - name: Build web output
         run: npm run build
 
