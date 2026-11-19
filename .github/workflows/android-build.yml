@@ -50,6 +50,18 @@ jobs:
           echo '--- Web root and deployment route config ---'
           find web -maxdepth 2 -type f | head -40
           cat vercel.json
+      - name: Locate deployed Supabase API and account UI handlers
+        run: |
+          echo '--- Top-level extracted source ---'
+          find . -maxdepth 4 -type f | sort | head -180
+          echo '--- Supabase function folders ---'
+          find . -path '*functions*' -type f | head -100
+          echo '--- Account deletion and route symbols in all app source ---'
+          grep -RniE 'account-sign-out|signOutCloudVault|serve\(|Deno\.serve|cloudvault-api|auth/register|cv_users' . --exclude-dir=.git --exclude='*.b64' | head -180 || true
+          echo '--- Main action router context ---'
+          grep -n -A 70 -B 5 'account-sign-out' web/src/main.js
+          echo '--- Sign out helper context ---'
+          grep -n -A 22 -B 4 'async function signOutCloudVault' web/src/main.js
       - name: Add prominent Telegram API settings link
         run: node native-patches/add-telegram-api-link.mjs web/src/main.js
       - uses: actions/setup-node@v4
